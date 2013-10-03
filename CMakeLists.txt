@@ -60,7 +60,7 @@ find_package(Boost REQUIRED)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+  INCLUDE_DIRS include
 #  LIBRARIES spheres_localization
 #  CATKIN_DEPENDS cv_bridge freenect_camera image_transport opencv2 pcl roscpp sensor_msgs std_msgs
 #  DEPENDS system_lib
