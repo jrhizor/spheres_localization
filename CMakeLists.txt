@@ -60,7 +60,7 @@ find_package(Boost REQUIRED)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-  INCLUDE_DIRS include
+#  INCLUDE_DIRS include
 #  LIBRARIES spheres_localization
 #  CATKIN_DEPENDS cv_bridge freenect_camera image_transport opencv2 pcl roscpp sensor_msgs std_msgs
 #  DEPENDS system_lib
@@ -77,6 +77,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 	${Boost_INCLUDE_DIR}
 	${OpenCV_INCLUDE_DIRS}
+	./include
 )
 
 ## Declare a cpp library
@@ -85,8 +86,8 @@ include_directories(
 # )
 
 ## Declare a cpp executable
-add_executable(estimate_pose src/estimate_pose.cpp)
-add_executable(T0 src/T0.cpp)
+add_executable(pose_estimation src/pose_estimation/pose_estimation.cpp)
+add_executable(collection src/collection/collection.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
@@ -98,8 +99,8 @@ add_executable(T0 src/T0.cpp)
 # )
 
 
-target_link_libraries(estimate_pose ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
-target_link_libraries(T0 ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
+target_link_libraries(pose_estimation ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
+target_link_libraries(collection ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
 
 #############
 ## Install ##

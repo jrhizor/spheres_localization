@@ -36,7 +36,7 @@
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/numeric/ublas/io.hpp>
 
-#include "./rottoquat.h"
+#include <spheres_localization/utilities/rottoquat.h>
 
 using namespace std;
 using namespace cv;
