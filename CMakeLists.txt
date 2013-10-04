@@ -88,6 +88,9 @@ include_directories(
 ## Declare a cpp executable
 add_executable(pose_estimation src/pose_estimation/pose_estimation.cpp)
 add_executable(collection src/collection/collection.cpp)
+add_executable(charting src/charting/charting.cpp)
+add_executable(registration src/registration/registration.cpp)
+add_executable(visualization src/visualization/visualization.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
