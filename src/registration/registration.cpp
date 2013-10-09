@@ -10,7 +10,9 @@
 #include <fstream>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
+#include <pcl/filters/passthrough.h>
 #include <pcl/registration/icp.h>
+#include <pcl/visualization/cloud_viewer.h>
 
 int main(int argc, char* argv[]) 
 {
@@ -25,10 +27,10 @@ int main(int argc, char* argv[])
 	int folderIndex = 0;
 	bool fileCorrelated;
 	char pcdFileName[] = "capture.pcd";
-	char *folderPath;
-	char *totalPath;
-	char *errorString;
-	char *resultPath;
+	char folderPath[700];
+	char totalPath[700];
+	char errorString[700];
+	char resultPath[700];
 
 	// Verify command line arguments
 	if(argc < 2)
@@ -67,9 +69,9 @@ int main(int argc, char* argv[])
 	}
 
 	// Read in first pointcloud into aggregate and save identity matrix there
-	if(pcl::io::loadPCDFile<pcl::PointXYZ> ("/0/capture.pcd", *totalCloud) == -1)
+	if(pcl::io::loadPCDFile<pcl::PointXYZ> ("./0/capture.pcd", *totalCloud) == -1)
 	{
-		PCL_ERROR ("Could not load file /0/capture.pcd \n");
+		PCL_ERROR ("Could not load file ./0/capture.pcd \n");
 		return -1;
 	}
 	// TODO: Identity matrix
@@ -82,13 +84,17 @@ int main(int argc, char* argv[])
 	// While files remain, and no files are invalid, add pointclouds
 	while( imageCount > 0 && fileCorrelated == true)
 	{
+		std::cout << imageCount << " " << folderIndex << std::endl; 
+
+
 		// Disable correlation flag
 		fileCorrelated = false;
 
 		// Determine file path
-		sprintf(folderPath, "/%i",folderIndex);
-		sprintf(totalPath, "/%i/%s",folderIndex,pcdFileName);
+		sprintf(folderPath, "./%i",folderIndex);
+		sprintf(totalPath, "./%i/%s",folderIndex,pcdFileName);
 
+		std::cout << "Read in new pointcloud" << std::endl;
 		// Read in new pointcloud
 		if(pcl::io::loadPCDFile<pcl::PointXYZ> (totalPath, *newCloud) == -1)
 		{
@@ -97,18 +103,53 @@ int main(int argc, char* argv[])
 			return -1;
 		}		
 
-		// Run correlation from new cloud to aggregate
-		icp.setInputSource(newCloud);
-		icp.setInputTarget(totalCloud);
-		icp.align(resultCloud);
 
+		std::cout << "Align clouds." << std::endl;
+
+		std::cout << "size: " << newCloud->size() << " " << totalCloud->size() << std::endl;
+
+		// Run correlation from new cloud to 
+		pcl::PassThrough<pcl::PointXYZ> pass;
+		pass.setInputCloud(newCloud);
+		pass.filter(*newCloud);
+
+		pass.setInputCloud(totalCloud);
+		pass.filter(*totalCloud);
+
+		icp.setInputSource(newCloud);
+		std::cout << "afterinputset." << std::endl;
+		icp.setInputTarget(totalCloud);
+		std::cout << "aftertargetset." << std::endl;
+		icp.align(resultCloud);
+		std::cout << resultCloud.size() << std::endl;
+
+
+	pcl::visualization::CloudViewer viewer("Simple");
+	// viewer.showCloud(newCloud);
+	// while(!viewer.wasStopped()){}
+
+	// 		viewer.showCloud(totalCloud);
+	// while(!viewer.wasStopped()){}
+
+
+
+		std::cout << "Check for convergence." << std::endl;
 		// If correlation was successful, continue through
 		if( icp.hasConverged() )
 		{
+
+			std::cout << "Creating transformation." << std::endl;
 			// Transform the input matrix
 
 			// Add the input matrix to the total matrix
 			*totalCloud = resultCloud;
+
+
+			viewer.showCloud(totalCloud);
+	while(!viewer.wasStopped()){}
+
+
+
 
 			// Save transform matrix to same directory as cloud
 			sprintf(resultPath, "%s/transform.txt", folderPath);
@@ -121,7 +162,19 @@ int main(int argc, char* argv[])
 
 		}
 
+		imageCount--;
+		folderIndex++;
+		
 	}
+
+	std::cout << "Finished registration." << std::endl;
+
+
+
+
+
+
+
 
 	// Save the aggregated pointcloud in the root directory
 	pcl::io::savePCDFile ("totalCloud.pcd", *totalCloud);
