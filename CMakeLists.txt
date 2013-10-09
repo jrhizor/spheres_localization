@@ -104,6 +104,7 @@ add_executable(visualization src/visualization/visualization.cpp)
 
 target_link_libraries(pose_estimation ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
 target_link_libraries(collection ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
+target_link_libraries(registration ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
 
 #############
 ## Install ##

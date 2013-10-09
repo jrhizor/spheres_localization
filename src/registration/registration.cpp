@@ -15,18 +15,20 @@
 int main(int argc, char* argv[]) 
 {
 	// Define function variables
-	ifstream fin;
-	ofstream fout;
+	std::ifstream fin;
+	std::ofstream fout;
 	int imageCount = -1;
 	pcl::PointCloud<pcl::PointXYZ>::Ptr totalCloud (new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr newCloud (new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointCloud<pcl::PointXYZ>::Ptr resultCloud;
+	pcl::PointCloud<pcl::PointXYZ> resultCloud;
 	pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
 	int folderIndex = 0;
 	bool fileCorrelated;
-	string pcdFileName = "capture.pcd";
-	string folderPath;
-	string totalPath;
+	char pcdFileName[] = "capture.pcd";
+	char *folderPath;
+	char *totalPath;
+	char *errorString;
+	char *resultPath;
 
 	// Verify command line arguments
 	if(argc < 2)
@@ -52,7 +54,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Get the number of image/point cloud pairs
-	fin << imageCount;
+	fin >> imageCount;
 
 	// Close file
 	fin.close();
@@ -61,52 +63,57 @@ int main(int argc, char* argv[])
 	if(imageCount < 2)
 	{
 		std::cout << "Operation invalid on less than two files." << std::endl;
-		return 0;
+		return -1;
 	}
 
 	// Read in first pointcloud into aggregate and save identity matrix there
 	if(pcl::io::loadPCDFile<pcl::PointXYZ> ("/0/capture.pcd", *totalCloud) == -1)
 	{
 		PCL_ERROR ("Could not load file /0/capture.pcd \n");
-		return -1
+		return -1;
 	}
+	// TODO: Identity matrix
 
 	// Prime the loop
 	fileCorrelated = true;
-	fileCount--;
+	imageCount--;
 	folderIndex++;
 
 	// While files remain, and no files are invalid, add pointclouds
-	while( fileCount > 0 && fileCorrelated = true;)
+	while( imageCount > 0 && fileCorrelated == true)
 	{
 		// Disable correlation flag
 		fileCorrelated = false;
 
 		// Determine file path
-		folderPath = "/" + std::itoa(folderIndex) + "/";
-		totalPath = folderPath + pcdFileName;
+		sprintf(folderPath, "/%i",folderIndex);
+		sprintf(totalPath, "/%i/%s",folderIndex,pcdFileName);
 
 		// Read in new pointcloud
 		if(pcl::io::loadPCDFile<pcl::PointXYZ> (totalPath, *newCloud) == -1)
 		{
-			PCL_ERROR ("Could not load file " + totalpath + " \n");
-			return -1
+			sprintf(errorString, "Could not load file %s .\n", totalPath);
+			PCL_ERROR (errorString);
+			return -1;
 		}		
 
 		// Run correlation from new cloud to aggregate
-		icp.setInputCloud(newCloud);
+		icp.setInputSource(newCloud);
 		icp.setInputTarget(totalCloud);
 		icp.align(resultCloud);
 
 		// If correlation was successful, continue through
 		if( icp.hasConverged() )
 		{
-			// Combine the two clouds using new transform matrix
-			totalCloud = resultCloud;
+			// Transform the input matrix
+
+			// Add the input matrix to the total matrix
+			*totalCloud = resultCloud;
 
 			// Save transform matrix to same directory as cloud
-			fout.open(folderPath + "transform.txt");
-			fout << icp.getFinalTransform();
+			sprintf(resultPath, "%s/transform.txt", folderPath);
+			fout.open(resultPath);
+			fout << icp.getFinalTransformation();
 			fout.close();
 
 			// Let the loop continue
@@ -117,7 +124,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Save the aggregated pointcloud in the root directory
-	pcl::io::savePCDFileASCII ("totalCloud.pcd", totalCloud);
+	pcl::io::savePCDFile ("totalCloud.pcd", *totalCloud);
 
 	// Return successful completion
 	return 0;
