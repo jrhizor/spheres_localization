@@ -78,6 +78,7 @@ include_directories(
 	${Boost_INCLUDE_DIR}
 	${OpenCV_INCLUDE_DIRS}
 	./include
+  ${PCL_INCLUDE_DIRS}
 )
 
 ## Declare a cpp library
@@ -101,10 +102,12 @@ add_executable(visualization src/visualization/visualization.cpp)
 #   ${catkin_LIBRARIES}
 # )
 
+add_definitions(${PCL_DEFINITIONS})
+add_definitions(-Wno-deprecated -DEIGEN_DONT_VECTORIZE -DEIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT)
 
 target_link_libraries(pose_estimation ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
 target_link_libraries(collection ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
-target_link_libraries(registration ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
+target_link_libraries(registration ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} ${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so)
 
 #############
 ## Install ##
