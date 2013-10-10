@@ -14,18 +14,18 @@
 #include <pcl/point_types.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/registration/icp.h>
-#include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/visualization/cloud_viewer.h>
 
 //convenient typedefs
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> PointCloud;
 
-bool loadPointClouds(char* filepath, std::vector<PointCloud::Ptr> cloudSet)
+bool loadPointClouds(char* filepath, std::vector<PointCloud::Ptr> &cloudSet)
 {
 	// Define function variables
 	std::ifstream fin;
 	std::string directory = std::string(filepath);
-	std::string fname = directory + "info.txt";
+	std::string fname = directory + "/info.txt";
 	int filecount;
 
 
@@ -45,7 +45,9 @@ bool loadPointClouds(char* filepath, std::vector<PointCloud::Ptr> cloudSet)
 
 		// Get the pointcloud's name
 		std::stringstream ss;
-		ss << directory << "/depth/" << index+1 << ".pcd";
+		ss << directory << "/depth/capture" << index+1 << ".pcd";
+
+		std::cout << ss.str() << std::endl;
 
 		// Read pointcloud
 		pcl::io::loadPCDFile(ss.str(), *tempCloud);
@@ -108,11 +110,11 @@ int main(int argc, char* argv[])
 
 	// TODO: Identity matrix for mat 1
 
-	// Copy pointcloud 1 into aggregated point cloud
-	*totalCloud = *cloudSet[1];
+	// Copy pointcloud 0 into aggregated point cloud
+	*totalCloud = *cloudSet[0];
 
 	// Process all pointclouds
-	ss << folderPath << "transforms.txt";
+	ss << folderPath << "/transforms.txt";
 	fout.open(ss.str().c_str());
 	for(int index=1; index < cloudSet.size(); index++)
 	{
@@ -131,6 +133,12 @@ int main(int argc, char* argv[])
 		}
 	}
 	fout.close();
+
+
+	// Visualize registered pointcloud
+	pcl::visualization::CloudViewer viewer("Simple");
+	viewer.showCloud(totalCloud);
+	while(!viewer.wasStopped()){}
 
 	// Save the aggregated pointcloud in the root directory
 	pcl::io::savePCDFile ("totalCloud.pcd", *totalCloud);
