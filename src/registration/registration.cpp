@@ -37,7 +37,7 @@
 
 /* \author Radu Bogdan Rusu
  * adaptation Raphael Favier
- * further adaptation by Alexander McArther */\
+ * further adaptation by Alexander McArther */
 
 #include <boost/make_shared.hpp>
 #include <pcl/point_types.h>
@@ -74,13 +74,6 @@ typedef pcl::PointCloud<PointNormalT> PointCloudWithNormals;
 	int vp_1, vp_2;
 
 //convenient structure to handle our pointclouds
-struct PCD
-{
-	PointCloud::Ptr cloud;
-	std::string f_name;
-
-	PCD() : cloud (new PointCloud) {};
-};
 
 
 
@@ -401,15 +394,15 @@ int main (int argc, char** argv)
 		//update the global transform
 		GlobalTransform = pairTransform * GlobalTransform;
 
-		pcl::transformPointCloud (*target, *temp, GlobalTransform);
+		//pcl::transformPointCloud (*target, *temp, GlobalTransform);
 
 		completionPerc = (((float) i+1) / ((float) data.size())) * 3.0f;
 		red 	= (int)(sin(completionPerc) * 127.0f + 128.0f);
 		green 	= (int)(sin(completionPerc + phaseDiff) * 127.0f + 128.0f);
 		blue 	= (int)(sin(completionPerc + 2.0f*phaseDiff) * 127.0f + 128.0f);
 		sstream << "capture" << i+1;
-		PointCloudColorHandlerCustom<PointT> cloud_tgt_h (temp, red, green, blue);
-		p->addPointCloud (temp, cloud_tgt_h, sstream.str(), vp_2);
+		PointCloudColorHandlerCustom<PointT> cloud_tgt_h (result, red, green, blue);
+		p->addPointCloud (result, cloud_tgt_h, sstream.str(), vp_2);
 		p-> spin();
 
 
