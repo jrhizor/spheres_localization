@@ -38,6 +38,7 @@
 
 #include <spheres_localization/utilities/rottoquat.h>
 
+/*
 using namespace std;
 using namespace cv;
 using namespace pcl;
@@ -151,7 +152,8 @@ void getFeatures(const string &method, const Mat &img, vector<KeyPoint> &keypoin
 	{
 		FREAK freakDect;	
 		int startMark = clock();
-		FAST(img, keypoints, 20/*threshold*/);
+		FAST(img, keypoints, 20//threshold
+		);
 		int detectMark = clock();
 		freakDect.compute(img, keypoints, desc);
 		int describeMark = clock();
@@ -179,7 +181,8 @@ void getFeatures(const string &method, const Mat &img, vector<KeyPoint> &keypoin
 	{
 		ORB orbDect(700, 1.2f, 5, 31, 0, 2, ORB::HARRIS_SCORE, 31);	
 		int startMark = clock();
-		FAST(img, keypoints, 20/*threshold*/);
+		FAST(img, keypoints, 20 //threshold
+			);
 		int detectMark = clock();
 		orbDect.compute(img, keypoints, desc);
 		int describeMark = clock();
@@ -316,20 +319,20 @@ int main()
 } 
 
 
-/*
-	ORB
-	SIFT
-	SURF
-	FAST+FREAK
-	MSER+ORB
-	MSER+Moments
 
-	output overall processing time, detection, description, matching times, error from ground truth, number of points detected, number of points retained
+	// ORB
+	// SIFT
+	// SURF
+	// FAST+FREAK
+	// MSER+ORB
+	// MSER+Moments
 
-	also need to look at Android to Kinect matches vs Kinect to Kinect matches
+	// output overall processing time, detection, description, matching times, error from ground truth, number of points detected, number of points retained
 
-	if time, use ICP to generate a larger map and test images over that.
-*/
+	// also need to look at Android to Kinect matches vs Kinect to Kinect matches
+
+	// if time, use ICP to generate a larger map and test images over that.
+
 
 
 void findMatchesAndPose(Mat &desc, Mat &desc2, const vector<KeyPoint> &keypoints, const vector<KeyPoint> &keypoints2, 
@@ -358,7 +361,8 @@ void findMatchesAndPose(Mat &desc, Mat &desc2, const vector<KeyPoint> &keypoints
 	for(int i = 0; i < matches.size(); i++)
 	{
   		if(matches[i].size() == 2 && 
-  	  		(matches[i][0].distance / matches[i][1].distance)<ratio/* && good_matches.size() <20*/ &&
+  	  		(matches[i][0].distance / matches[i][1].distance)<ratio // && good_matches.size() <20
+  	  		&&
   	  		keypoints2[matches[i][0].queryIdx].pt.y <480 &&
   	  		keypoints2[matches[i][0].queryIdx].pt.x <640 &&
   	  		keypoints2[matches[i][0].queryIdx].pt.y >=0 &&
@@ -391,10 +395,10 @@ Mat result;
    cout << ss.str() << endl;
 	//namedWindow(ss.str(), CV_WINDOW_AUTOSIZE );// Create a window for display.
 	imwrite(ss.str(), result);
-/*    imshow( ss.str(), result );   
-char  aksk;
-cin >> aksk;
-*/
+//     imshow( ss.str(), result );   
+// char  aksk;
+// cin >> aksk;
+
 
 	startMark = clock();
 	cout << "BEFORE EPNP" << endl;
@@ -488,3 +492,47 @@ int pnp(const vector<KeyPoint> &keypoints, const vector<KeyPoint> &keypoints2,
 
 	return inliers.size();
 }
+*/
+
+void load_map(const std::string &input)
+{
+  std::ofstream fout(output_file.c_str());
+
+  fout << reg_imgs.size() << std::endl
+       << type_size << std::endl;
+
+  fout.precision(15);
+
+  for(unsigned int i=0; i<reg_imgs.size(); ++i)
+  {
+    std::vector<std::vector<double> > output_lines = generate_3d_desc(reg_imgs[i], type, type_size);
+    
+    for(unsigned int j=0; j<output_lines.size(); ++j)
+    {
+      ROS_ASSERT(output_lines[j].size()-3==type_size);
+
+      for(unsigned int k=0; k<3; ++k)
+      {
+        fout << output_lines[j][k] << " ";
+      }
+
+      fout << std::endl;
+
+      for(unsigned int k=3; k<output_lines[j].size(); ++k)
+      {
+        fout << output_lines[j][k] << " ";
+      }
+
+      fout << std::endl;
+    }
+  }
+
+  fout.close();
+}
+
+int main(int argc, char const *argv[])
+{
+	
+	return 0;
+}
+

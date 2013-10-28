@@ -62,16 +62,13 @@ pcl::PointXYZ get_3d_point(const cv::Mat &depth, int u, int v)
 	return pcl::PointXYZ(X,Y,Z);
 }
 
-// TODO: convert to newer OpenCV standards
-bool euler_angle(const CvMat& rot, CvPoint3D64f& euler) {
-	double _R[9], _Q[9];
-	CvMat R, Q;
-	CvMat *pQx=NULL, *pQy=NULL, *pQz=NULL;  // optional. For debugging.
-	cvInitMatHeader(&R,  3, 3, CV_64FC1, _R);
-	cvInitMatHeader(&Q,  3, 3, CV_64FC1, _Q);
+// TODO: check if 32S is fine instead of 64F
+cv::Vec3d euler_angle(const cv::Mat &rot) 
+{
+	cv::Mat R(3, 3, CV_32S);
+	cv::Mat Q(3, 3, CV_32S);
 
-	cvRQDecomp3x3(&rot, &R, &Q, pQx, pQy, pQz, &euler);
-	return true;
+	return cv::RQDecomp3x3(rot, R, Q);
 }
 
 #endif
