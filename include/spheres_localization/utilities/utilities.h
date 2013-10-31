@@ -71,4 +71,29 @@ cv::Vec3d euler_angle(const cv::Mat &rot)
 	return cv::RQDecomp3x3(rot, R, Q);
 }
 
+void createCloud(const cv::Mat &depth, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+{
+  float fx = 525.0;
+  float fy = 525.0;
+  float cx = 319.5;
+  float cy = 239.5;
+
+  float factor = 5000; 
+
+  float X, Y, Z;
+
+  for(int v=0; v<depth.rows; v++)
+  {
+    for(int u=0; u<depth.cols; u++)
+    {
+      X = (u - cx) * Z / fx;
+      Y = (v - cy) * Z / fy;
+      Z = depth.at<float>(v,u) / factor;
+
+      // push 3d point
+      cloud->push_back(pcl::PointXYZ(X,Y,Z));
+    }
+  }   
+}
+
 #endif

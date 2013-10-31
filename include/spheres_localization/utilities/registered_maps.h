@@ -1,6 +1,54 @@
 #ifndef SL_REGISTERED_MAPS_H
 #define SL_REGISTERED_MAPS_H
 
+#include <stdint.h>
+
+#include <string>
+#include <sstream>
+
+#include <cassert>
+#include <functional>
+
+#include <stdio.h>
+#include <time.h>
+#include <ctime>
+#include <vector>
+#include <cmath>
+#include <iostream>
+#include <signal.h>
+#include <unistd.h>
+
+#include <fstream>
+
+#include <ros/ros.h>
+
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/features2d/features2d.hpp>
+#include <opencv2/nonfree/features2d.hpp>
+#include <opencv2/legacy/legacy.hpp>
+
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/PointCloud2.h>
+
+#include <pcl_ros/point_cloud.h>
+#include <pcl_ros/io/pcd_io.h>
+
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+
+#include <spheres_localization/utilities/utilities.h>
+#include <spheres_localization/utilities/utilities.h>
+
+struct InterestPoint3D
+{
+	float x,y,z;
+	std::vector<float> descriptor;
+};
+
 struct RegImg
 {
   std::string rgb_file;
@@ -191,6 +239,38 @@ void generate_map(const std::vector<RegImg> &reg_imgs, const std::string &output
   }
 
   fout.close();
+}
+
+std::vector<InterestPoint3D> load_map(const std::string &input)
+{
+  std::vector<InterestPoint3D> point_map;
+
+  std::ifstream fin(input.c_str());
+
+  int num_img, type_size;
+
+  fin >> num_img >> type_size;
+
+  for(unsigned int i=0; i<num_img; ++i)
+  {
+    InterestPoint3D pt;
+
+    fin >> pt.x >> pt.y >> pt.z;
+    
+    for(unsigned int j=0; j<type_size; ++j)
+    {
+      float temp;
+      fin >> temp;
+
+      pt.descriptor.push_back(temp);
+    }
+
+    point_map.push_back(pt);
+  }
+
+  fin.close();
+
+  return point_map;
 }
 
 #endif
