@@ -46,41 +46,61 @@ struct RegImg
 {
   std::string rgb_file;
   std::string depth_file;
-  cv::Mat transformation;
+  cv::Mat translation, rotation;
 };
 
-std::vector<RegImg> load_sequence(const std::string &input_file)
+std::vector<RegImg> load_sequence(const std::string &input_folder, int num_images)
 {
   std::vector<RegImg> reg_imgs;
-  std::ifstream fin(input_file.c_str());
-  unsigned int num_img;
 
-  fin >> num_img;
-
-  for(unsigned int i=0; i<num_img; ++i)
+  for(int i=0; i<num_images; ++i)
   {
-    RegImg img;
-    cv::Mat transformation(3, 3, CV_32S);
+    std::cout << "\tProcessing frame " << i << std::endl;
 
-    std::getline(fin, img.rgb_file);
-    std::getline(fin, img.depth_file);
+    RegImg frame;
 
-    fin >> transformation.at<float>(1, 1)
-        >> transformation.at<float>(1, 2)
-        >> transformation.at<float>(1, 3)
-        >> transformation.at<float>(2, 1)
-        >> transformation.at<float>(2, 2)
-        >> transformation.at<float>(2, 3)
-        >> transformation.at<float>(3, 1)
-        >> transformation.at<float>(3, 2)
-        >> transformation.at<float>(3, 3);
+    // record file names
+    frame.rgb_file = input_folder + boost::lexical_cast<std::string>(i) + std::string(".png");
+    frame.depth_file = input_folder + boost::lexical_cast<std::string>(i) + std::string("_d.png");
+    std::string transform_file = input_folder + boost::lexical_cast<std::string>(i) + std::string(".txt");
 
-    img.transformation = transformation;
+    std::cout << "\t\tRGB File" << frame.rgb_file << std::endl;
+    std::cout << "\t\tDepth File" << frame.depth_file << std::endl;
+    std::cout << "\t\tTransform File" << transform_file << std::endl;
 
-    reg_imgs.push_back(img);
+    // load transformation
+    std::ifstream fin(transform_file.c_str());
+
+    cv::Mat rotation(3, 3, CV_32FC1);
+    cv::Mat translation(3, 1, CV_32FC1);
+
+    std::string temp;
+
+    fin >> temp;
+
+    fin >> translation.at<float>(0, 0) 
+        >> translation.at<float>(1, 0) 
+        >> translation.at<float>(2, 0);
+
+    fin >> temp;
+
+    fin >> rotation.at<float>(0, 0)
+        >> rotation.at<float>(0, 1)
+        >> rotation.at<float>(0, 2)
+        >> rotation.at<float>(1, 0)
+        >> rotation.at<float>(1, 1)
+        >> rotation.at<float>(1, 2)
+        >> rotation.at<float>(2, 0)
+        >> rotation.at<float>(2, 1)
+        >> rotation.at<float>(2, 2);
+
+    fin.close();
+
+    frame.translation = translation;
+    frame.rotation = rotation;
+
+    reg_imgs.push_back(frame);
   }
-
-  fin.close();
 
   return reg_imgs;
 }
@@ -146,20 +166,20 @@ std::vector<std::vector<double> > generate_3d_desc(const RegImg &img, const std:
     int v = keypoints[i].pt.y;
 
     pcl::PointXYZ pos = get_3d_point(depth, u, v);
-    cv::Mat mat_pos(3, 1, CV_32S);
+    cv::Mat mat_pos(3, 1, CV_32FC1);
 
     // TODO: check if this has to be in homogenous coordinates
-    mat_pos.at<float>(1,1) = pos.x;
-    mat_pos.at<float>(2,1) = pos.y;
-    mat_pos.at<float>(3,1) = pos.z;
+    mat_pos.at<float>(0,0) = pos.x;
+    mat_pos.at<float>(1,0) = pos.y;
+    mat_pos.at<float>(2,0) = pos.z;
 
-    cv::Mat trans_pos = img.transformation * mat_pos;
+    cv::Mat trans_pos = img.rotation * (mat_pos+img.translation);
 
     std::vector<double> map_element;
 
-    map_element.push_back(trans_pos.at<float>(1,1));
-    map_element.push_back(trans_pos.at<float>(2,1));
-    map_element.push_back(trans_pos.at<float>(3,1));
+    map_element.push_back(trans_pos.at<float>(0,0));
+    map_element.push_back(trans_pos.at<float>(1,0));
+    map_element.push_back(trans_pos.at<float>(2,0));
 
     // TODO: check if this is grabbing the correct part of desc
     for(unsigned int j=0; j<type_size; ++j)
@@ -169,6 +189,8 @@ std::vector<std::vector<double> > generate_3d_desc(const RegImg &img, const std:
 
     map_elements.push_back(map_element);
   }
+
+  std::cout << "\t\tDescriptors: " << map_elements.size() << std::endl;
 
   return map_elements;
 }
@@ -185,6 +207,7 @@ void generate_map(const std::vector<RegImg> &reg_imgs, const std::string &output
 
   for(unsigned int i=0; i<reg_imgs.size(); ++i)
   {
+    std::cout << "\tProcessing frame " << i << std::endl;
     std::vector<std::vector<double> > output_lines = generate_3d_desc(reg_imgs[i], type, type_size);
     
     for(unsigned int j=0; j<output_lines.size(); ++j)
@@ -214,16 +237,28 @@ int main(int argc, char **argv)
 {
   ros::init(argc, argv, "charting");
 
-  ROS_ASSERT(argc==5);
+  ROS_ASSERT(argc==6);
 
-  std::string input_file = argv[1]; // .slmapreg file
-  std::string output_file = argv[2]; // .slmap file
-  std::string type = argv[3]; // descriptor type name
-  int type_size = atoi(argv[4]); // descriptor type name
+  std::string input_folder = argv[1]; 
+  int num_images = atoi(argv[2]);
+  std::string desc_type = argv[3]; // descriptor type name
+  int desc_type_size = atoi(argv[4]); // descriptor type size
+  std::string output_path = argv[5];
 
-  std::vector<RegImg> reg_imgs = load_sequence(input_file);
+  // force trailing slash
+  if(input_folder[input_folder.size()-1]!='/')
+  {
+    input_folder = input_folder + std::string("/");
+  }
 
-  generate_map(reg_imgs, output_file, type, type_size);
+  std::cout << "Loading sequence." << std::endl;
+  std::vector<RegImg> reg_imgs = load_sequence(input_folder, num_images);
+
+
+  std::cout << "Generating map." << std::endl;
+  generate_map(reg_imgs, output_path, desc_type, desc_type_size);
+
+  std::cout << "Finished." << std::endl;
 
   return 0;
 }

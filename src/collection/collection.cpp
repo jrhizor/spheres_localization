@@ -33,6 +33,8 @@
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 
+#include <boost/lexical_cast.hpp>
+
 namespace enc = sensor_msgs::image_encodings;
 
 using namespace std;

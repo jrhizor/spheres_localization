@@ -494,41 +494,41 @@ int pnp(const vector<KeyPoint> &keypoints, const vector<KeyPoint> &keypoints2,
 }
 */
 
-void load_map(const std::string &input)
-{
-  std::ofstream fout(output_file.c_str());
+// void load_map(const std::string &input)
+// {
+//   std::ofstream fout(output_file.c_str());
 
-  fout << reg_imgs.size() << std::endl
-       << type_size << std::endl;
+//   fout << reg_imgs.size() << std::endl
+//        << type_size << std::endl;
 
-  fout.precision(15);
+//   fout.precision(15);
 
-  for(unsigned int i=0; i<reg_imgs.size(); ++i)
-  {
-    std::vector<std::vector<double> > output_lines = generate_3d_desc(reg_imgs[i], type, type_size);
+//   for(unsigned int i=0; i<reg_imgs.size(); ++i)
+//   {
+//     std::vector<std::vector<double> > output_lines = generate_3d_desc(reg_imgs[i], type, type_size);
     
-    for(unsigned int j=0; j<output_lines.size(); ++j)
-    {
-      ROS_ASSERT(output_lines[j].size()-3==type_size);
+//     for(unsigned int j=0; j<output_lines.size(); ++j)
+//     {
+//       ROS_ASSERT(output_lines[j].size()-3==type_size);
 
-      for(unsigned int k=0; k<3; ++k)
-      {
-        fout << output_lines[j][k] << " ";
-      }
+//       for(unsigned int k=0; k<3; ++k)
+//       {
+//         fout << output_lines[j][k] << " ";
+//       }
 
-      fout << std::endl;
+//       fout << std::endl;
 
-      for(unsigned int k=3; k<output_lines[j].size(); ++k)
-      {
-        fout << output_lines[j][k] << " ";
-      }
+//       for(unsigned int k=3; k<output_lines[j].size(); ++k)
+//       {
+//         fout << output_lines[j][k] << " ";
+//       }
 
-      fout << std::endl;
-    }
-  }
+//       fout << std::endl;
+//     }
+//   }
 
-  fout.close();
-}
+//   fout.close();
+// }
 
 int main(int argc, char const *argv[])
 {
