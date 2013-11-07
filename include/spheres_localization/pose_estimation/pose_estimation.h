@@ -42,12 +42,12 @@
 #include <spheres_localization/utilities/registered_maps.h>
 
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const cv::Mat &depth, int &numInliers, 
+            const cv::Mat &depth, int &numInliers, 
             int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &mapImg, const cv::Mat &queryImg,
             cv::Mat &tvec, ::boost::math::quaternion<double> &q);
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            const std::vector<cv::DMatch> &good_matches, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const cv::Mat &depth, 
+            const std::vector<cv::DMatch> &good_matches, const cv::Mat &depth, 
             cv::Mat &tvec, ::boost::math::quaternion<double> &q);
 
 void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &desc, int &timeDetect, 
@@ -147,7 +147,7 @@ void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::
 }
 
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const cv::Mat &depth, int &numInliers, 
+            const cv::Mat &depth, int &numInliers, 
             int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &mapImg, const cv::Mat &queryImg,
             cv::Mat &tvec, ::boost::math::quaternion<double> &q)
 {
@@ -213,7 +213,7 @@ cv::Mat result;
 
   startMark = clock();
   std::cout << "BEFORE EPNP" << std::endl;
-  numInliers = pnp(keypoints, keypoints2, good_matches, cloud, depth, tvec, q);
+  numInliers = pnp(keypoints, keypoints2, good_matches, depth, tvec, q);
   endMark = clock();
 
   timePE = endMark - startMark;
@@ -226,7 +226,7 @@ cv::Mat result;
 
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            const std::vector<cv::DMatch> &good_matches, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const cv::Mat &depth, 
+            const std::vector<cv::DMatch> &good_matches, const cv::Mat &depth, 
             cv::Mat &tvec, ::boost::math::quaternion<double> &q)
 {
   std::vector<cv::Point3f> objectPoints;

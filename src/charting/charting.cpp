@@ -1,6 +1,6 @@
 #include <spheres_localization/utilities/registered_maps.h>
 
-int main(int argc, char **argv)
+int main(int argc, char **argv) // input_folder num_images descriptor_type descriptor_size output_file_path
 {
   ros::init(argc, argv, "charting");
 
