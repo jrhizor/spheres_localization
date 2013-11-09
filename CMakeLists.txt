@@ -108,7 +108,10 @@ add_definitions(-Wno-deprecated -DEIGEN_DONT_VECTORIZE -DEIGEN_DISABLE_UNALIGNED
 target_link_libraries(charting ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
 target_link_libraries(pose_estimation ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
 target_link_libraries(collection ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
-target_link_libraries(registration ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} ${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so)
+target_link_libraries(registration ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} 
+${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so)
+target_link_libraries(visualization ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} 
+${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so libvtkIO.so libvtkHybrid.so)
 
 #############
 ## Install ##
