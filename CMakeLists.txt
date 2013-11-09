@@ -92,6 +92,7 @@ add_executable(collection src/collection/collection.cpp)
 add_executable(charting src/charting/charting.cpp)
 add_executable(registration src/registration/registration.cpp)
 add_executable(visualization src/visualization/visualization.cpp)
+add_executable(temp_broadcaster src/pose_estimation/temp_broadcaster.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
@@ -112,6 +113,10 @@ target_link_libraries(registration ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Bo
 ${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so)
 target_link_libraries(visualization ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} 
 ${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so libvtkIO.so libvtkHybrid.so)
+
+
+target_link_libraries(temp_broadcaster ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} 
+${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so)
 
 #############
 ## Install ##
