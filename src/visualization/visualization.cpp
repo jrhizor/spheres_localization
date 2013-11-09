@@ -44,6 +44,8 @@
 #include <iostream>
 #include <sstream>
 
+#include <pcl/filters/voxel_grid.h>
+
 #include <pcl/common/transforms.h>
 
 #include <pcl/kdtree/kdtree_flann.h>
@@ -211,6 +213,7 @@ int main (int argc, char** argv)
 
   // Prepare point cloud data structure
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloudFiltered (new pcl::PointCloud<pcl::PointXYZ>);
 
   // Load up the map pointcloud
   PCL_INFO ("\nLoading Map Point Cloud %s...\n", argv[1]);
@@ -221,7 +224,7 @@ int main (int argc, char** argv)
     return -1;
   }
   
-  // Shrink the pointcloud
+  // Shrink the pointcloud to the same scale as the camera data
   for(size_t i =0; i < cloud->size (); ++i)
   {
     cloud->points[i].x*=0.006;
@@ -229,6 +232,13 @@ int main (int argc, char** argv)
     cloud->points[i].z*=0.006;
 
   }
+
+  // Downsample the pointcloud
+  pcl::VoxelGrid<pcl::PointXYZ> sor;
+  sor.setInputCloud(cloud);
+  sor.setLeafSize(0.02f,0.02f,0.02f);
+  sor.filter(*cloudFiltered);
+
   // Load textures and cameras poses and intrinsics
   PCL_INFO ("\nLoading textures and camera poses...\n");
 
@@ -255,7 +265,7 @@ int main (int argc, char** argv)
   
   // Display cameras to user
   //(PCL_INFO ("\nDisplaying cameras. Press \'q\' to continue texture mapping\n");
-    showCameras(my_cams, cloud);
+    showCameras(my_cams, cloudFiltered);
   
     cin.get();
     cin.get();
