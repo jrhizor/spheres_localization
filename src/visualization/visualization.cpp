@@ -1,42 +1,3 @@
-/*
- * Software License Agreement (BSD License)
- *
- *  Point Cloud Library (PCL) - www.pointclouds.org
- *  Copyright (c) 2010-2011, Willow Garage, Inc.
- *
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of Willow Garage, Inc. nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *
- *  Author: Raphael Favier, Technical University Eindhoven, (r.mysurname <aT> tue.nl)
- */
-
-
 #include <boost/filesystem.hpp>
 #include <boost/thread/thread.hpp>
 
@@ -45,33 +6,39 @@
 #include <sstream>
 
 #include <pcl/filters/voxel_grid.h>
-
 #include <pcl/common/transforms.h>
-
 #include <pcl/kdtree/kdtree_flann.h>
-
 #include <pcl/features/normal_3d.h>
-
 #include <pcl/visualization/pcl_visualizer.h>
-
 #include <pcl/surface/texture_mapping.h>
-
 #include <pcl/io/vtk_lib_io.h>
 
-using namespace pcl;
+#include "ros/ros.h"
+#include "std_msgs/String.h"
+#include  <signal.h>
 
-/** \brief Display a 3D representation showing the a cloud and a list of camera with their 6DOf poses */
-void showCameras (pcl::texture_mapping::CameraVector cams, pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud)
+
+// Global badness
+pcl::visualization::PCLVisualizer visu ("cameras");
+
+
+void  INThandler(int sig)
 {
 
-  // visualization object
-  pcl::visualization::PCLVisualizer visu ("cameras");
-  
-  // add the mesh's cloud (colored on Z axis)
-  pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloud, "z");
-  visu.addPointCloud (cloud, color_handler, "cloud");
+     signal(sig, SIG_IGN);
+     exit(0);
 
-  //visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "cloud");
+}
+
+
+void chatterCallback(const std_msgs::String::ConstPtr& msg)
+{
+  ROS_INFO("I heard: [%s]", msg->data.c_str());
+}
+
+/** \brief Display a 3D representation showing the a cloud and a list of camera with their 6DOf poses */
+void showCameras (pcl::texture_mapping::CameraVector cams, pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud,pcl::visualization::PCLVisualizer &visu)
+{
 
 
   // add a visual for each camera at the correct pose
@@ -133,14 +100,6 @@ void showCameras (pcl::texture_mapping::CameraVector cams, pcl::PointCloud<pcl::
     visu.addLine (p3, p2,ss.str ());
   }
 
-  // add a coordinate system
-  visu.addCoordinateSystem (1.0);
-
-  // reset camera
-  visu.resetCamera ();
-  
-  // wait for user input
-  visu.spin ();
 }
 
 /** \brief Helper function that jump to a specific line of a text file */
@@ -196,11 +155,11 @@ bool readCamPoseFile(std::string filename, pcl::TextureMapping<pcl::PointXYZ>::C
   cam.pose (3,3) = 1.0; //Scale
   
   // go to line 12 to read camera focal length and size
-  GotoLine (myReadFile, 12);
-  myReadFile >> val; cam.focal_length=val; 
-  myReadFile >> val; cam.height=val;
-  myReadFile >> val; cam.width=val;  
-  
+  // EDIT: Hard coded (to kinect values) since the phone will not have this information available
+  cam.focal_length = 575.816f;
+  cam.height = 480;
+  cam.width = 640;
+
   // close file
   myReadFile.close ();
 
@@ -211,9 +170,16 @@ bool readCamPoseFile(std::string filename, pcl::TextureMapping<pcl::PointXYZ>::C
 int main (int argc, char** argv)
 {
 
+  // Prepare ros for listening
+  ros::init(argc, argv, "listener");
+  ros::NodeHandle n;
+  ros::Subscriber sub = n.subscribe("chatter", 1000, chatterCallback);
+ 
   // Prepare point cloud data structure
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloudFiltered (new pcl::PointCloud<pcl::PointXYZ>);
+
+  // Prepare visualization object
 
   // Load up the map pointcloud
   PCL_INFO ("\nLoading Map Point Cloud %s...\n", argv[1]);
@@ -259,17 +225,29 @@ int main (int argc, char** argv)
     }
   }
 
+  // add the mesh's cloud (colored on Z axis)
+  pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloud, "z");
+  visu.addPointCloud (cloud, color_handler, "cloud");
 
-  PCL_INFO ("\tLoaded %d textures.\n", my_cams.size ());
-  PCL_INFO ("...Done.\n");
+  // add a coordinate system
+  visu.addCoordinateSystem (1.0);
+
+  // reset camera
+  visu.resetCamera ();
   
   // Display cameras to user
   //(PCL_INFO ("\nDisplaying cameras. Press \'q\' to continue texture mapping\n");
-    showCameras(my_cams, cloudFiltered);
+  //showCameras(my_cams, cloudFiltered, visu);
+  signal(SIGINT, INThandler);
+
   
-    cin.get();
-    cin.get();
-  
+  // Spin through ros callbacks and pcl window monitoring
+  while(true)
+  {
+    visu.spinOnce();
+    ros::spinOnce();
+    std::cout << "hi" << std::endl;
+  }
 
   return (0);
 }
