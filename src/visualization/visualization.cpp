@@ -61,39 +61,55 @@ void showCameras (pcl::TextureMapping<pcl::PointXYZ>::Camera cam)
   ss << "Cam";
   visu.removeShape(ss.str());
   visu.addText3D(ss.str (), p1, 0.1, 1.0, 1.0, 1.0, ss.str ());
+  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
 
   ss.str ("");
   ss << "camera" << "line1";
   visu.removeShape(ss.str());
   visu.addLine (p1, p2,ss.str ());
+  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
+  
   ss.str ("");
   ss << "camera" << "line2";
   visu.removeShape(ss.str());
   visu.addLine (p1, p3,ss.str ());
+  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
+
   ss.str ("");
   ss << "camera" << "line3";
   visu.removeShape(ss.str());
   visu.addLine (p1, p4,ss.str ());
+  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
+
   ss.str ("");
   ss << "camera" << "line4";
   visu.removeShape(ss.str());
   visu.addLine (p1, p5,ss.str ());
+  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
+  
   ss.str ("");
   ss << "camera" << "line5";
   visu.removeShape(ss.str());
   visu.addLine (p2, p5,ss.str ());
+  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
+  
   ss.str ("");
   ss << "camera" << "line6";
   visu.removeShape(ss.str());
   visu.addLine (p5, p4,ss.str ());
+  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
+  
   ss.str ("");
   ss << "camera" << "line7";
   visu.removeShape(ss.str());
   visu.addLine (p4, p3,ss.str ());
+  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
+  
   ss.str ("");
   ss << "camera" << "line8";
   visu.removeShape(ss.str());
   visu.addLine (p3, p2,ss.str ());
+  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
 
 }
 
@@ -154,7 +170,7 @@ bool readCamPoseFile(const std_msgs::String::ConstPtr& msg, pcl::TextureMapping<
 
 void chatterCallback(const std_msgs::String::ConstPtr& msg)
 {
-  ROS_INFO("I heard: [%s]", msg->data.c_str());
+  //ROS_INFO("I heard: [%s]", msg->data.c_str());
   pcl::TextureMapping<pcl::PointXYZ>::Camera cam;
 
   readCamPoseFile(msg, cam);
@@ -196,12 +212,14 @@ int main (int argc, char** argv)
   // Downsample the pointcloud
   pcl::VoxelGrid<pcl::PointXYZ> sor;
   sor.setInputCloud(cloud);
-  sor.setLeafSize(0.02f,0.02f,0.02f);
+  sor.setLeafSize(0.01f,0.01f,0.01f);
   sor.filter(*cloudFiltered);
 
   // add the mesh's cloud (colored on Z axis)
-  pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloud, "z");
-  visu.addPointCloud (cloud, color_handler, "cloud");
+  pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloudFiltered, "z");
+  //pcl::visualization::PointCloudColorHandlerRandom<pcl::PointXYZ> color_handler (cloud);
+  visu.addPointCloud (cloudFiltered, color_handler, "cloud");
+  //visu.addPointCloud(cloudFiltered, "cloud");
 
   // add a coordinate system
   visu.addCoordinateSystem (1.0);
@@ -220,7 +238,6 @@ int main (int argc, char** argv)
   {
     visu.spinOnce();
     ros::spinOnce();
-    std::cout << "hi" << std::endl;
   }
 
   return (0);
