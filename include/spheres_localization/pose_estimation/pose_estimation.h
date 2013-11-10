@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <string>
+#include <map>
 #include <sstream>
 
 #include <cassert>
@@ -11,6 +12,7 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <cstdlib>
 #include <ctime>
 #include <vector>
 #include <cmath>
@@ -41,14 +43,16 @@
 #include <spheres_localization/utilities/rottoquat.h>
 #include <spheres_localization/utilities/registered_maps.h>
 
+typedef std::map<std::pair<float,float>, pcl::PointXYZ> PtLookupTable;
+
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const cv::Mat &depth, int &numInliers, 
-            int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &mapImg, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q);
+            int &numInliers, 
+            int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup);
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            const std::vector<cv::DMatch> &good_matches, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const cv::Mat &depth, 
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q);
+            const std::vector<cv::DMatch> &good_matches, 
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup);
 
 void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &desc, int &timeDetect, 
             int &timeDescribe)
@@ -147,9 +151,9 @@ void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::
 }
 
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const cv::Mat &depth, int &numInliers, 
-            int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &mapImg, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q)
+             int &numInliers, 
+            int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup)
 {
   cv::BruteForceMatcher<cv::L2<float> > matcher;
   std::vector<std::vector<cv::DMatch> > matches;
@@ -171,19 +175,16 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
   std::vector<cv::DMatch > good_matches;
   for(int i = 0; i < matches.size(); i++)
   {
-      if(matches[i].size() == 2 && 
-          (matches[i][0].distance / matches[i][1].distance)<ratio // && good_matches.size() <20
-          &&
+    if(matches[i].size() == 2 && 
+          (matches[i][0].distance / matches[i][1].distance)<ratio &&
           keypoints2[matches[i][0].queryIdx].pt.y <480 &&
           keypoints2[matches[i][0].queryIdx].pt.x <640 &&
           keypoints2[matches[i][0].queryIdx].pt.y >=0 &&
           keypoints2[matches[i][0].queryIdx].pt.x >=0)
     {
-      float x = (float) depth.at<int16_t>(int(keypoints2[matches[i][0].queryIdx].pt.y),int(keypoints2[matches[i][0].queryIdx].pt.x));
-      if(!(x != x) || x == 0)
-        {
-          good_matches.push_back(matches[i][0]);
-        }
+
+    good_matches.push_back(matches[i][0]);
+
     }
   }
 
@@ -197,23 +198,9 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
   timeMatch = endMark - startMark;
 
 
-cv::Mat result;
-      drawMatches(mapImg, keypoints, queryImg, keypoints2, good_matches, result, cv::Scalar::all(-1), cv::Scalar::all(-1),
-                std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS  ); 
-   std::stringstream ss;//create a stringstream
-   ss << "/home/jared/Desktop/spheres_localization/kinect_report/results/" << clock() << ".jpg";//add number to the stream
-
-   std::cout << ss.str() << std::endl;
-  //namedWindow(ss.str(), CV_WINDOW_AUTOSIZE );// Create a window for display.
-  imwrite(ss.str(), result);
-//     imshow( ss.str(), result );   
-// char  aksk;
-// cin >> aksk;
-
-
   startMark = clock();
   std::cout << "BEFORE EPNP" << std::endl;
-  numInliers = pnp(keypoints, keypoints2, good_matches, cloud, depth, tvec, q);
+  numInliers = pnp(keypoints, keypoints2, good_matches, tvec, q, map_position_lookup);
   endMark = clock();
 
   timePE = endMark - startMark;
@@ -226,20 +213,20 @@ cv::Mat result;
 
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            const std::vector<cv::DMatch> &good_matches, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const cv::Mat &depth, 
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q)
+            const std::vector<cv::DMatch> &good_matches,
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup)
 {
   std::vector<cv::Point3f> objectPoints;
   std::vector<cv::Point2f> imagePoints;
   
   cv::Vec3d euler;
 
-    for(int i = 0; i < good_matches.size(); i++)
+  for(int i = 0; i < good_matches.size(); i++)
   {
-    pcl::PointXYZ pt = get_3d_point(depth,keypoints[(good_matches[i].queryIdx)].pt.x, 
-                    keypoints[(good_matches[i].queryIdx)].pt.y);
+    std::pair<float,float> location = std::make_pair(keypoints[(good_matches[i].queryIdx)].pt.x,keypoints[(good_matches[i].queryIdx)].pt.y);
+    pcl::PointXYZ pt = map_position_lookup[location];
 
-      double Xw = pt.x, Yw = pt.y, Zw = pt.z, u, v;
+    double Xw = pt.x, Yw = pt.y, Zw = pt.z, u, v;
 
     u = keypoints2[(good_matches[i].trainIdx)].pt.x;
     v = keypoints2[(good_matches[i].trainIdx)].pt.y;

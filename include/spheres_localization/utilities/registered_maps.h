@@ -251,11 +251,12 @@ std::vector<InterestPoint3D> load_map(const std::string &input)
 
   fin >> num_img >> type_size;
 
-  for(unsigned int i=0; i<num_img; ++i)
-  {
-    InterestPoint3D pt;
+  InterestPoint3D pt;
+  fin >> pt.x >> pt.y >> pt.z;
 
-    fin >> pt.x >> pt.y >> pt.z;
+  while(fin.good())
+  {
+    pt.descriptor.clear();
     
     for(unsigned int j=0; j<type_size; ++j)
     {
@@ -266,6 +267,8 @@ std::vector<InterestPoint3D> load_map(const std::string &input)
     }
 
     point_map.push_back(pt);
+
+    fin >> pt.x >> pt.y >> pt.z;
   }
 
   fin.close();
