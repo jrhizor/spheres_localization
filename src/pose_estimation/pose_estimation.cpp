@@ -1,13 +1,16 @@
 #include <spheres_localization/pose_estimation/pose_estimation.h>
 
-
-int main(int argc, char **argv)
+int main(int argc, char **argv) // rosrun spheres_localization pose_estimation /home/jrhizor/Desktop/KinFuSnapshots/map.txt SIFT /camera/image_raw
 {
+  ros::init(argc, argv, "pose_estimation");
+
   // rosrun spheres_localization pose_estimation /home/jrhizor/Desktop/KinFuSnapshots/map.txt SIFT topicname
   ROS_ASSERT(argc==4);
   std::string map_file_name = argv[1];
   std::string method = argv[2];
-  std::string camera_topic = argv[3];
+  std::string camera_topic = argv[3]; 
+
+  //  export GSCAM_CONFIG="v4l2src device=/dev/video0 ! video/x-raw-rgb,framerate=30/1 ! ffmpegcolorspace"
 
   // load map
   std::vector<InterestPoint3D> world_map = load_map(map_file_name);
@@ -38,45 +41,8 @@ int main(int argc, char **argv)
   ROS_INFO("Filled containers with map information.");
 
 
-
-
-  // initialize stuff
-  int timeDetect, timeDescribe, timeMatch, timePE;
-  int totalDetect=0, totalDescribe=0, totalMatch=0, totalInliers=0, totalGoodMatches=0, totalPE = 0,
-      numGoodMatches=0, numInliers=0;
-  int numQueries = 12;
-
-
-
-  cv::Mat tvec;
-  ::boost::math::quaternion<double> q;
-
-
-  std::string queryFile = "/home/jrhizor/Desktop/KinFuSnapshots/0.png";
-
-  cv::Mat img = cv::imread(queryFile, 0); 
-
-  std::cout << img.size().height << " " <<  img.size().width << std::endl;
-
-  for(int i=0; i<1; ++i)
-  {
-    std::vector<cv::KeyPoint> keypoints;
-    cv::Mat desc;
-
-    getFeatures(method, img, keypoints, desc, timeDetect, timeDescribe);
-
-    findMatchesAndPose(map_desc, desc, map_keypoints, keypoints, numInliers, numGoodMatches, 
-              timeMatch, timePE, img, tvec, q, map_position_lookup);
-
-    // output pose 
-    std::cout << "tvec " << tvec << std::endl;
-    std::cout  << " " <<
-          tvec.at<double>(0,0) << " " << tvec.at<double>(0,1) << " " << tvec.at<double>(0,2) << " " <<
-          q.R_component_1() <<" "<< q.R_component_2()  << " " << q.R_component_3() << " " << q.R_component_4() << 
-          std::endl;
-
-    std::cout << std::endl << std::endl;
-  }
+  PoseEstimator estimator(camera_topic);
+  estimator.run(map_keypoints, map_desc, map_position_lookup, method);
 
   return 0;
 } 

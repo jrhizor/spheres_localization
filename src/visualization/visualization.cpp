@@ -183,7 +183,7 @@ int main (int argc, char** argv)
   // Prepare ros for listening
   ros::init(argc, argv, "listener");
   ros::NodeHandle n;
-  ros::Subscriber sub = n.subscribe("temp_broadcaster", 1000, chatterCallback);
+  ros::Subscriber sub = n.subscribe("pose_estimation", 1000, chatterCallback);
  
   // Prepare point cloud data structure
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);

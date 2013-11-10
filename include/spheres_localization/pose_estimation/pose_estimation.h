@@ -43,16 +43,24 @@
 #include <spheres_localization/utilities/rottoquat.h>
 #include <spheres_localization/utilities/registered_maps.h>
 
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+#include "std_msgs/String.h"
+
+namespace enc = sensor_msgs::image_encodings;
+
 typedef std::map<std::pair<float,float>, pcl::PointXYZ> PtLookupTable;
 
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             int &numInliers, 
             int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup);
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result);
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             const std::vector<cv::DMatch> &good_matches, 
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup);
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result);
 
 void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &desc, int &timeDetect, 
             int &timeDescribe)
@@ -153,7 +161,7 @@ void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
              int &numInliers, 
             int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup)
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result)
 {
   cv::BruteForceMatcher<cv::L2<float> > matcher;
   std::vector<std::vector<cv::DMatch> > matches;
@@ -199,8 +207,8 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
 
 
   startMark = clock();
-  std::cout << "BEFORE EPNP" << std::endl;
-  numInliers = pnp(keypoints, keypoints2, good_matches, tvec, q, map_position_lookup);
+  // std::cout << "BEFORE EPNP" << std::endl;
+  numInliers = pnp(keypoints, keypoints2, good_matches, tvec, q, map_position_lookup, rot_mat_result);
   endMark = clock();
 
   timePE = endMark - startMark;
@@ -214,7 +222,7 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             const std::vector<cv::DMatch> &good_matches,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup)
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result)
 {
   std::vector<cv::Point3f> objectPoints;
   std::vector<cv::Point2f> imagePoints;
@@ -278,20 +286,146 @@ int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoi
   rot_mat_r3.a32 = rotmat.at<double>(2,1);
   rot_mat_r3.a33 = rotmat.at<double>(2,2);
 
+  cv::Mat rot_mat_temp(3, 3, CV_32F);
+  for(int i=0; i<3; i++)
+  {   
+    for(int j=0; j<3; j++)
+    {
+      rot_mat_temp.at<float>(i,j) = float(rotmat.at<double>(i,j));
+    }
+  }
+  rot_mat_result = rot_mat_temp.inv();
+
+  tvec.at<double>(0) *= -1;
+  tvec.at<double>(1) *= -1;
+  tvec.at<double>(2) *= -1;
+
+
   q = R3_rotation_to_quaternion(rot_mat_r3);
 
   euler = euler_angle(rotmat);
 
 
   // todo: check ordering
-  std::cout << "roll" << "\t\t" << "pitch" << "\t\t" << "yaw" << std::endl;
-  std::cout << euler[0] <<"\t" << euler[1] << "\t" << euler[2] << std::endl; 
-  std::cout << tvec << std::endl;
+  // std::cout << "roll" << "\t\t" << "pitch" << "\t\t" << "yaw" << std::endl;
+  // std::cout << euler[0] <<"\t" << euler[1] << "\t" << euler[2] << std::endl; 
+  // std::cout << tvec << std::endl;
   //std::cout << inliers.size() << std::endl;
 
   return inliers.size();
 }
 
 
+class PoseEstimator
+{
+  public:
+    PoseEstimator(const std::string &camera_topic);
+    void updateRGB(const sensor_msgs::ImageConstPtr& msg);
+    void run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_desc, PtLookupTable &map_position_lookup, const std::string &method);
+
+  private: 
+    // ros
+    ros::NodeHandle n;
+
+    // subscribing to camera
+    image_transport::ImageTransport it;
+    image_transport::Subscriber rgb_sub;
+    cv_bridge::CvImagePtr rgb;
+    cv_bridge::CvImage rgbI;
+
+    // publishing to visualizer
+    ros::Publisher pose_pub;
+
+    // handle updates
+    bool new_image;
+};
+
+void PoseEstimator::updateRGB(const sensor_msgs::ImageConstPtr& msg)
+{
+  try
+  {
+    rgb = cv_bridge::toCvCopy(msg, enc::BGR8);
+  }
+  catch (cv_bridge::Exception& e)
+  {
+    ROS_ERROR("cv_bridge exception: %s", e.what());
+    return;
+  }
+
+  rgbI = *rgb;
+
+  new_image = true;
+}
+
+PoseEstimator::PoseEstimator(const std::string &camera_topic) : it(n), new_image(false)
+{
+  rgb_sub = it.subscribe(camera_topic, 1, &PoseEstimator::updateRGB, this);
+  pose_pub = n.advertise<std_msgs::String>("pose_estimation", 1000);
+}
+
+void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_desc, PtLookupTable &map_position_lookup, const std::string &method)
+{
+  // initialize stuff
+  int timeDetect, timeDescribe, timeMatch, timePE;
+  int totalDetect=0, totalDescribe=0, totalMatch=0, totalInliers=0, totalGoodMatches=0, totalPE = 0,
+      numGoodMatches=0, numInliers=0;
+  int numQueries = 12;
+
+  cv::Mat tvec, rot_mat;
+  ::boost::math::quaternion<double> q;
+
+  while(ros::ok())
+  {
+    ros::spinOnce();
+    
+    // std::string queryFile = "/home/jrhizor/Desktop/KinFuSnapshots/0.png";
+    // cv::Mat img = cv::imread(queryFile, 0); 
+    cv::Mat img = rgbI.image;
+
+    if(img.size().height !=0)
+    {
+      new_image = false;
+
+      std::vector<cv::KeyPoint> keypoints;
+      cv::Mat desc;
+
+      getFeatures(method, img, keypoints, desc, timeDetect, timeDescribe);
+
+      findMatchesAndPose(map_desc, desc, map_keypoints, keypoints, numInliers, numGoodMatches, 
+                timeMatch, timePE, img, tvec, q, map_position_lookup, rot_mat);
+
+      // output pose 
+      // std::cout  << " " <<
+      //       -1*tvec.at<double>(0,0) << " " << -1*tvec.at<double>(0,1) << " " << -1*tvec.at<double>(0,2) << " " <<
+      //       q.R_component_1() <<" "<< q.R_component_2()  << " " << q.R_component_3() << " " << q.R_component_4() << 
+      //       std::endl;
+
+
+      std::cout << "tvec " << tvec << std::endl;
+      std::cout << "rot_mat " << rot_mat << std::endl;
+
+      std::stringstream ss;
+      ss << tvec.at<double>(0) << " "
+         << tvec.at<double>(1) << " "
+         << tvec.at<double>(2) << " "
+         << rot_mat.at<float>(0,0) << " "
+         << rot_mat.at<float>(0,1) << " "
+         << rot_mat.at<float>(0,2) << " "
+         << rot_mat.at<float>(1,0) << " "
+         << rot_mat.at<float>(1,1) << " "
+         << rot_mat.at<float>(1,2) << " "
+         << rot_mat.at<float>(2,0) << " "
+         << rot_mat.at<float>(2,1) << " "
+         << rot_mat.at<float>(2,2);
+
+
+      std::cout << ss.str() << std::endl << std::endl;
+
+      std_msgs::String msg;
+      msg.data = ss.str();
+      pose_pub.publish(msg);
+    }
+  }
+}
 
 #endif

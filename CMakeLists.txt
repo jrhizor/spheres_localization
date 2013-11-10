@@ -62,7 +62,7 @@ find_package(Boost REQUIRED)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES spheres_localization
-#  CATKIN_DEPENDS cv_bridge freenect_camera image_transport opencv2 pcl roscpp sensor_msgs std_msgs
+#  CATKIN_DEPENDS cv_bridge freenect_camera image_transport roscpp sensor_msgs std_msgs
 #  DEPENDS system_lib
 )
 
