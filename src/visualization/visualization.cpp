@@ -188,7 +188,7 @@ int main (int argc, char** argv)
   // Prepare point cloud data structure
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloudFiltered (new pcl::PointCloud<pcl::PointXYZ>);
-
+pcl::PointCloud<pcl::PointXYZ>::Ptr mapCloud(new pcl::PointCloud<pcl::PointXYZ>);
   // Prepare visualization object
 
   // Load up the map pointcloud
@@ -216,10 +216,51 @@ int main (int argc, char** argv)
   sor.filter(*cloudFiltered);
 
   // add the mesh's cloud (colored on Z axis)
-  pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloudFiltered, "z");
+  pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloudFiltered, "x");
   //pcl::visualization::PointCloudColorHandlerRandom<pcl::PointXYZ> color_handler (cloud);
   visu.addPointCloud (cloudFiltered, color_handler, "cloud");
   //visu.addPointCloud(cloudFiltered, "cloud");
+
+  // Draw the damn map
+  std::ifstream fin("map.txt");
+  float valCatcher;
+
+  // Read some junk we dont care about
+  fin >> valCatcher >> valCatcher;
+
+int dumbCounter=0;
+pcl::PointXYZ oldPoint = pcl::PointXYZ(-1,-1,-1);
+
+  // Get all of those points
+  for(int i =0; i < atoi(argv[2]); i++)
+  {
+    float x, y, z;
+
+    fin >> x >> y >> z;
+
+    // Read in all those junk features
+    for(int j=0; j < 128; j ++)
+    {
+      fin >> valCatcher;
+    }
+
+    // Plot point
+    mapCloud->push_back(pcl::PointXYZ(x,y,z));
+    
+    // if(oldPoint.x != x || oldPoint.y != y || oldPoint.z != z)
+    // {
+    //   oldPoint = pcl::PointXYZ(x,y,z);
+    //   dumbCounter++;
+    //   std::stringstream ss2;
+    //   ss2 << "Perspective " << dumbCounter;
+    //     visu.addText3D(ss2.str(), oldPoint, 0.02, 1.0, 0.0, 0.0, ss2.str ());
+    // }
+  }
+
+  visu.addPointCloud(mapCloud, "mapCloud");
+
+  // Set point properties
+  visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "mapCloud");
 
   // add a coordinate system
   visu.addCoordinateSystem (1.0);

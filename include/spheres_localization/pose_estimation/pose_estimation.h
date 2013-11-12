@@ -49,6 +49,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include "std_msgs/String.h"
 
+
 namespace enc = sensor_msgs::image_encodings;
 
 // typedef std::map<std::pair<float,float>, pcl::PointXYZ> PtLookupTable;
@@ -250,6 +251,9 @@ int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoi
       }
   }
 
+
+std::cout << good_matches.size() << std::endl;
+
   cv::Mat rvec, rotmat, jacobian;
 
   // default for
@@ -260,14 +264,14 @@ int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoi
 
   //solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
   
-  int initMinInliers = 7;
+  int initMinInliers = 50;
   int count = 0;
 
   while(inliers.size()==0 && count < 5)
   {
     inliers.clear();
     solvePnPRansac(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, 
-          100, //iterations 
+          300, //iterations 
           10, // reproj error 
           initMinInliers, // min inliers 
           inliers, CV_EPNP);
@@ -378,13 +382,21 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
   cv::Mat tvec, rot_mat;
   ::boost::math::quaternion<double> q;
 
+  int counter = 0;
+
+
   while(ros::ok())
   {
     ros::spinOnce();
     
     // std::string queryFile = "/home/jrhizor/Desktop/KinFuSnapshots/0.png";
     // cv::Mat img = cv::imread(queryFile, 0); 
-    cv::Mat img = rgbI.image;
+    std::stringstream newss;
+    newss << counter;
+    cv::Mat img = cv::imread("rot/" + newss.str() + ".png"); //rgbI.image;
+    counter++;
+    counter %= 12;
+
 
     if(img.size().height !=0)
     {

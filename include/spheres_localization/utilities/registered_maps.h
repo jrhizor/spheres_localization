@@ -115,7 +115,7 @@ std::vector<RegImg> load_sequence(const std::string &input_folder, int num_image
 
 std::vector<std::vector<double> > generate_3d_desc(const RegImg &img, const std::string &type, int type_size)
 {
-  cv::Mat rgb = cv::imread(img.rgb_file, CV_LOAD_IMAGE_COLOR);
+  cv::Mat rgb = cv::imread(img.rgb_file, CV_LOAD_IMAGE_GRAYSCALE);
   cv::Mat depth = cv::imread(img.depth_file, CV_LOAD_IMAGE_GRAYSCALE);
 
   ROS_ASSERT(rgb.rows != 0 && rgb.cols != 0 && depth.rows != 0 && depth.cols != 0);
@@ -169,19 +169,30 @@ std::vector<std::vector<double> > generate_3d_desc(const RegImg &img, const std:
 
   for(unsigned int i=0; i<keypoints.size(); ++i)
   {
-    // TODO: check if u and v are the right order
     int u = keypoints[i].pt.x;
     int v = keypoints[i].pt.y;
 
     pcl::PointXYZ pos = get_3d_point(depth, u, v);
     cv::Mat mat_pos(3, 1, CV_32FC1);
 
-    // TODO: check if this has to be in homogenous coordinates
     mat_pos.at<float>(0,0) = pos.x;
     mat_pos.at<float>(1,0) = pos.y;
     mat_pos.at<float>(2,0) = pos.z;
 
-    cv::Mat trans_pos = img.rotation * (mat_pos+img.translation);
+    //cv::Mat trans_pos = (img.rotation.inv()*img.translation)+(img.rotation *mat_pos);
+    //cv::Mat trans_pos =(img.translation)+(img.rotation.inv() *mat_pos);
+    
+    // Pure camera positioning
+    //cv::Mat trans_pos =(img.translation);
+
+    // Positioning + map data
+    cv::Mat trans_pos =(img.rotation.inv() *img.translation)+(img.rotation *mat_pos);
+
+
+    //cv::Mat trans_pos = (img.rotation.inv()*img.translation);
+
+    //cv::Mat trans_pos = mat_pos + img.rotation.inv() * img.translation;
+    // cv::Mat trans_pos = (img.rotation*img.translation) + mat_pos;
 
     std::vector<double> map_element;
 
@@ -189,7 +200,6 @@ std::vector<std::vector<double> > generate_3d_desc(const RegImg &img, const std:
     map_element.push_back(trans_pos.at<float>(1,0));
     map_element.push_back(trans_pos.at<float>(2,0));
 
-    // TODO: check if this is grabbing the correct part of desc
     for(unsigned int j=0; j<type_size; ++j)
     {
       map_element.push_back(desc.at<float>(i, j));
