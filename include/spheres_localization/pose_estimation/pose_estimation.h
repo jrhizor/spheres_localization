@@ -51,7 +51,8 @@
 
 namespace enc = sensor_msgs::image_encodings;
 
-typedef std::map<std::pair<float,float>, pcl::PointXYZ> PtLookupTable;
+// typedef std::map<std::pair<float,float>, pcl::PointXYZ> PtLookupTable;
+typedef std::vector<InterestPoint3D> PtLookupTable;
 
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             int &numInliers, 
@@ -191,7 +192,7 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
           keypoints2[matches[i][0].queryIdx].pt.x >=0)
     {
 
-    good_matches.push_back(matches[i][0]);
+      good_matches.push_back(matches[i][0]);
 
     }
   }
@@ -231,8 +232,11 @@ int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoi
 
   for(int i = 0; i < good_matches.size(); i++)
   {
-    std::pair<float,float> location = std::make_pair(keypoints[(good_matches[i].queryIdx)].pt.x,keypoints[(good_matches[i].queryIdx)].pt.y);
-    pcl::PointXYZ pt = map_position_lookup[location];
+    // std::pair<float,float> location = std::make_pair(keypoints[(good_matches[i].queryIdx)].pt.x,keypoints[(good_matches[i].queryIdx)].pt.y);
+    // pcl::PointXYZ pt = map_position_lookup[location];
+
+    InterestPoint3D ipt = map_position_lookup[good_matches[i].queryIdx];
+    pcl::PointXYZ pt(ipt.x, ipt.y, ipt.z);
 
     double Xw = pt.x, Yw = pt.y, Zw = pt.z, u, v;
 
@@ -241,8 +245,8 @@ int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoi
 
       if(!(Zw != Zw))
       {
-      objectPoints.push_back(cv::Point3f(Xw, Yw, Zw));
-      imagePoints.push_back(cv::Point2f(u,v));
+        objectPoints.push_back(cv::Point3f(Xw, Yw, Zw));
+        imagePoints.push_back(cv::Point2f(u,v));
       }
   }
 

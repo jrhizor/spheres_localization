@@ -32,8 +32,8 @@ int main(int argc, char **argv) // rosrun spheres_localization pose_estimation /
       map_desc.at<float>(i,j) = world_map[i].descriptor[j];
     }
 
-    map_position_lookup[std::make_pair(temp_keypoint.pt.x, temp_keypoint.pt.y)] = 
-          pcl::PointXYZ(world_map[i].x,world_map[i].y,world_map[i].z);
+    // map_position_lookup[std::make_pair(temp_keypoint.pt.x, temp_keypoint.pt.y)] = 
+    //       pcl::PointXYZ(world_map[i].x,world_map[i].y,world_map[i].z);
 
     map_keypoints.push_back(temp_keypoint);
   }
@@ -42,7 +42,8 @@ int main(int argc, char **argv) // rosrun spheres_localization pose_estimation /
 
 
   PoseEstimator estimator(camera_topic);
-  estimator.run(map_keypoints, map_desc, map_position_lookup, method);
+  // estimator.run(map_keypoints, map_desc, map_position_lookup, method);
+  estimator.run(map_keypoints, map_desc, world_map, method);
 
   return 0;
 } 
