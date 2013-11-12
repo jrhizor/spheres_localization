@@ -41,14 +41,24 @@
 #include <spheres_localization/utilities/rottoquat.h>
 #include <spheres_localization/utilities/registered_maps.h>
 
+
+
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            const cv::Mat &depth, int &numInliers, 
-            int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &mapImg, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q);
+            int &numInliers, 
+            int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, std::map<std::pair<float,float>, pcl::PointXYZ> &depth_mapping);
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            const std::vector<cv::DMatch> &good_matches, const cv::Mat &depth, 
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q);
+            const std::vector<cv::DMatch> &good_matches, 
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, std::map<std::pair<float,float>, pcl::PointXYZ> &depth_mapping);
+
+std::map<std::pair<float,float>, pcl::PointXYZ> create_depth_mapping(std::vector<InterestPoint3D> &map3D);
+
+void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &desc, int &timeDetect, 
+            int &timeDescribe);
+
+
+
 
 void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &desc, int &timeDetect, 
             int &timeDescribe)
@@ -147,9 +157,9 @@ void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::
 }
 
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            const cv::Mat &depth, int &numInliers, 
-            int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &mapImg, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q)
+            int &numInliers, 
+            int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, std::map<std::pair<float,float>, pcl::PointXYZ> &depth_mapping)
 {
   cv::BruteForceMatcher<cv::L2<float> > matcher;
   std::vector<std::vector<cv::DMatch> > matches;
@@ -167,11 +177,32 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
 
     matcher.knnMatch(desc, desc2, matches, 2);
 
+  std::cout << "desc.height " << desc.size().height << std::endl;
+  std::cout << "desc.width " << desc.size().width << std::endl; 
+  std::cout << "desc2.height " << desc2.size().height << std::endl;
+  std::cout << "desc2.width " << desc2.size().width << std::endl; 
+
+  std::cout << "matches.size " << matches.size() << std::endl;
+
   double ratio = 0.75;
   std::vector<cv::DMatch > good_matches;
   for(int i = 0; i < matches.size(); i++)
   {
-      if(matches[i].size() == 2 && 
+
+    if(i==8485)
+    {
+      std::cout << keypoints2.size() << std::endl;
+      std::cout << matches[i].size() << std::endl; 
+      std::cout << matches[i][0].distance  << std::endl ;
+      std::cout << matches[i][1].distance << std::endl ;
+      std::cout << (matches[i][0].distance / matches[i][1].distance) << std::endl ;
+      std::cout << matches[i][0].queryIdx << std::endl;
+      std::cout << keypoints2[matches[i][0].queryIdx].pt.y << std::endl;
+      std::cout << keypoints2[matches[i][0].queryIdx].pt.x << std::endl;
+
+    }
+
+    if(matches[i].size() == 2 && 
           (matches[i][0].distance / matches[i][1].distance)<ratio // && good_matches.size() <20
           &&
           keypoints2[matches[i][0].queryIdx].pt.y <480 &&
@@ -179,13 +210,12 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
           keypoints2[matches[i][0].queryIdx].pt.y >=0 &&
           keypoints2[matches[i][0].queryIdx].pt.x >=0)
     {
-      float x = (float) depth.at<int16_t>(int(keypoints2[matches[i][0].queryIdx].pt.y),int(keypoints2[matches[i][0].queryIdx].pt.x));
-      if(!(x != x) || x == 0)
-        {
-          good_matches.push_back(matches[i][0]);
-        }
+
+        good_matches.push_back(matches[i][0]);
     }
   }
+
+  std::cout << "good_matches.size " << good_matches.size() << std::endl;
 
   if(matches.size()==0)
   {
@@ -197,15 +227,15 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
   timeMatch = endMark - startMark;
 
 
-cv::Mat result;
-      drawMatches(mapImg, keypoints, queryImg, keypoints2, good_matches, result, cv::Scalar::all(-1), cv::Scalar::all(-1),
-                std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS  ); 
-   std::stringstream ss;//create a stringstream
-   ss << "/home/jared/Desktop/spheres_localization/kinect_report/results/" << clock() << ".jpg";//add number to the stream
+// cv::Mat result;
+//       // drawMatches(mapImg, keypoints, queryImg, keypoints2, good_matches, result, cv::Scalar::all(-1), cv::Scalar::all(-1),
+//       //           std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS  ); 
+//    std::stringstream ss;//create a stringstream
+//    ss << "/home/jared/Desktop/spheres_localization/kinect_report/results/" << clock() << ".jpg";//add number to the stream
 
-   std::cout << ss.str() << std::endl;
-  //namedWindow(ss.str(), CV_WINDOW_AUTOSIZE );// Create a window for display.
-  imwrite(ss.str(), result);
+//    std::cout << ss.str() << std::endl;
+//   //namedWindow(ss.str(), CV_WINDOW_AUTOSIZE );// Create a window for display.
+//   imwrite(ss.str(), result);
 //     imshow( ss.str(), result );   
 // char  aksk;
 // cin >> aksk;
@@ -213,7 +243,7 @@ cv::Mat result;
 
   startMark = clock();
   std::cout << "BEFORE EPNP" << std::endl;
-  numInliers = pnp(keypoints, keypoints2, good_matches, depth, tvec, q);
+  numInliers = pnp(keypoints, keypoints2, good_matches, tvec, q, depth_mapping);
   endMark = clock();
 
   timePE = endMark - startMark;
@@ -224,31 +254,32 @@ cv::Mat result;
 
 
 
-
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
-            const std::vector<cv::DMatch> &good_matches, const cv::Mat &depth, 
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q)
+            const std::vector<cv::DMatch> &good_matches,
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, std::map<std::pair<float,float>, pcl::PointXYZ> &depth_mapping)
 {
   std::vector<cv::Point3f> objectPoints;
   std::vector<cv::Point2f> imagePoints;
   
   cv::Vec3d euler;
 
-    for(int i = 0; i < good_matches.size(); i++)
+  for(int i = 0; i < good_matches.size(); i++)
   {
-    pcl::PointXYZ pt = get_3d_point(depth,keypoints[(good_matches[i].queryIdx)].pt.x, 
-                    keypoints[(good_matches[i].queryIdx)].pt.y);
+  //   pcl::PointXYZ pt = get_3d_point(depth,keypoints[(good_matches[i].queryIdx)].pt.x, 
+  //                   keypoints[(good_matches[i].queryIdx)].pt.y); 
 
-      double Xw = pt.x, Yw = pt.y, Zw = pt.z, u, v;
+    pcl::PointXYZ pt = depth_mapping[std::make_pair(keypoints[(good_matches[i].queryIdx)].pt.x, keypoints[(good_matches[i].queryIdx)].pt.y)];
+
+    double Xw = pt.x, Yw = pt.y, Zw = pt.z, u, v;
 
     u = keypoints2[(good_matches[i].trainIdx)].pt.x;
     v = keypoints2[(good_matches[i].trainIdx)].pt.y;
 
-      if(!(Zw != Zw))
-      {
+    if(!(Zw != Zw))
+    {
       objectPoints.push_back(cv::Point3f(Xw, Yw, Zw));
       imagePoints.push_back(cv::Point2f(u,v));
-      }
+    }
   }
 
   cv::Mat rvec, rotmat, jacobian;
@@ -305,6 +336,17 @@ int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoi
   return inliers.size();
 }
 
+std::map<std::pair<float,float>, pcl::PointXYZ> create_depth_mapping(std::vector<InterestPoint3D> &map3D)
+{
+  std::map<std::pair<float,float>, pcl::PointXYZ> depth_mapping;
+
+  for(unsigned int i=0; i<map3D.size(); i++)
+  {
+    depth_mapping[std::make_pair(map3D[i].x, map3D[i].y)] = pcl::PointXYZ(map3D[i].x,map3D[i].y,map3D[i].z);
+  }
+
+  return depth_mapping;
+}
 
 
 #endif

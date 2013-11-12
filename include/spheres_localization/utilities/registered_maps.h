@@ -45,8 +45,8 @@
 
 struct InterestPoint3D
 {
-	float x,y,z;
-	std::vector<float> descriptor;
+  float x,y,z;
+  std::vector<float> descriptor;
 };
 
 struct RegImg
@@ -115,8 +115,8 @@ std::vector<RegImg> load_sequence(const std::string &input_folder, int num_image
 
 std::vector<std::vector<double> > generate_3d_desc(const RegImg &img, const std::string &type, int type_size)
 {
-  cv::Mat rgb = cv::imread(img.rgb_file, CV_LOAD_IMAGE_COLOR);
-  cv::Mat depth = cv::imread(img.depth_file, CV_LOAD_IMAGE_GRAYSCALE);
+  cv::Mat rgb = cv::imread(img.rgb_file, CV_LOAD_IMAGE_GRAYSCALE);
+  cv::Mat depth = cv::imread(img.depth_file, CV_LOAD_IMAGE_GRAYSCALE | CV_LOAD_IMAGE_ANYDEPTH);
 
   ROS_ASSERT(rgb.rows != 0 && rgb.cols != 0 && depth.rows != 0 && depth.cols != 0);
 
@@ -251,21 +251,24 @@ std::vector<InterestPoint3D> load_map(const std::string &input)
 
   fin >> num_img >> type_size;
 
-  for(unsigned int i=0; i<num_img; ++i)
-  {
-    InterestPoint3D pt;
 
-    fin >> pt.x >> pt.y >> pt.z;
-    
+  InterestPoint3D pt;
+  fin >> pt.x >> pt.y >> pt.z;
+
+  while(fin.good())
+  {
+    pt.descriptor.clear();
+
     for(unsigned int j=0; j<type_size; ++j)
     {
       float temp;
       fin >> temp;
-
       pt.descriptor.push_back(temp);
     }
 
     point_map.push_back(pt);
+
+    fin >> pt.x >> pt.y >> pt.z;
   }
 
   fin.close();
