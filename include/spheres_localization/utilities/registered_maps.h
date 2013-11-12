@@ -186,7 +186,7 @@ std::vector<std::vector<double> > generate_3d_desc(const RegImg &img, const std:
     //cv::Mat trans_pos =(img.translation);
 
     // Positioning + map data
-    cv::Mat trans_pos =(img.rotation.inv() *img.translation)+(img.rotation *mat_pos);
+    cv::Mat trans_pos =(img.translation)+(img.rotation *mat_pos);
 
 
     //cv::Mat trans_pos = (img.rotation.inv()*img.translation);

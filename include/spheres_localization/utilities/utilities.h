@@ -51,7 +51,7 @@ pcl::PointXYZ get_3d_point(const cv::Mat &depth, int u, int v)
 	float cx = 319.5;
 	float cy = 239.5;
 
-	float factor = 5000; 
+	float factor = 1000; 
 
 	float X, Y, Z;
 

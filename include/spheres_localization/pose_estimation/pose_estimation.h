@@ -192,11 +192,12 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
   for(int i = 0; i < matches.size(); i++)
   {
     if(matches[i].size() == 2 && 
-          (matches[i][0].distance / matches[i][1].distance)<ratio &&
-          keypoints2[matches[i][0].queryIdx].pt.y <480 &&
-          keypoints2[matches[i][0].queryIdx].pt.x <640 &&
-          keypoints2[matches[i][0].queryIdx].pt.y >=0 &&
-          keypoints2[matches[i][0].queryIdx].pt.x >=0)
+          (matches[i][0].distance / matches[i][1].distance)<ratio // &&
+          // keypoints2[matches[i][0].queryIdx].pt.y <480 &&
+          // keypoints2[matches[i][0].queryIdx].pt.x <640 &&
+          // keypoints2[matches[i][0].queryIdx].pt.y >=0 &&
+          // keypoints2[matches[i][0].queryIdx].pt.x >=0)
+          )
     {
       good_matches.push_back(matches[i][0]);
     }
@@ -278,7 +279,7 @@ std::cout << good_matches.size() << std::endl;
     inliers.clear();
     solvePnPRansac(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, 
           300, //iterations 
-          10, // reproj error 
+          1, // reproj error 
           initMinInliers, // min inliers 
           inliers, CV_EPNP);
     if(initMinInliers<imagePoints.size()*.75) initMinInliers++;
@@ -314,6 +315,25 @@ std::cout << good_matches.size() << std::endl;
   tvec.at<double>(1) *= -1;
   tvec.at<double>(2) *= -1;
 
+   std::cout << "1-------------------------------1" << std::endl;
+      std::stringstream ss;
+      ss << tvec.at<double>(0) << " "
+         << tvec.at<double>(1) << " "
+         << tvec.at<double>(2) << " "
+         << rot_mat_result.at<float>(0,0) << " "
+         << rot_mat_result.at<float>(0,1) << " "
+         << rot_mat_result.at<float>(0,2) << " "
+         << rot_mat_result.at<float>(1,0) << " "
+         << rot_mat_result.at<float>(1,1) << " "
+         << rot_mat_result.at<float>(1,2) << " "
+         << rot_mat_result.at<float>(2,0) << " "
+         << rot_mat_result.at<float>(2,1) << " "
+         << rot_mat_result.at<float>(2,2);
+
+
+      std::cout << ss.str() << std::endl << std::endl;
+   std::cout << "2-------------------------------2" << std::endl;
+
 
   q = R3_rotation_to_quaternion(rot_mat_r3);
 
@@ -329,17 +349,6 @@ std::cout << good_matches.size() << std::endl;
   return inliers.size();
 }
 
-std::map<std::pair<float,float>, pcl::PointXYZ> create_depth_mapping(std::vector<InterestPoint3D> &map3D)
-{
-  std::map<std::pair<float,float>, pcl::PointXYZ> depth_mapping;
-
-  for(unsigned int i=0; i<map3D.size(); i++)
-  {
-    depth_mapping[std::make_pair(map3D[i].x, map3D[i].y)] = pcl::PointXYZ(map3D[i].x,map3D[i].y,map3D[i].z);
-  }
-
-  return depth_mapping;
-}
 
 class PoseEstimator
 {
@@ -408,11 +417,12 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
     
     // std::string queryFile = "/home/jrhizor/Desktop/KinFuSnapshots/0.png";
     // cv::Mat img = cv::imread(queryFile, 0); 
-    std::stringstream newss;
-    newss << counter;
-    cv::Mat img = cv::imread("rot/" + newss.str() + ".png"); //rgbI.image;
-    counter++;
-    counter %= 12;
+    //std::stringstream newss;
+    //newss << counter;
+    //cv::Mat img = cv::imread("rot/" + newss.str() + ".png", CV_LOAD_IMAGE_GRAYSCALE); //rgbI.image;
+    cv::Mat img = rgbI.image;
+    //counter++;
+    //counter %= 12;
 
 
     if(img.size().height !=0)
@@ -433,6 +443,19 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
       //       q.R_component_1() <<" "<< q.R_component_2()  << " " << q.R_component_3() << " " << q.R_component_4() << 
       //       std::endl;
 
+
+    cv::Mat tvec_t(3, 1, CV_32FC1);
+
+    tvec_t.at<float>(0,0) = tvec.at<double>(0);
+    tvec_t.at<float>(1,0) = tvec.at<double>(1);
+    tvec_t.at<float>(2,0) = tvec.at<double>(2);
+
+      cv::Mat tvec_result =  rot_mat * tvec_t;
+
+
+    tvec.at<double>(0) = tvec_result.at<float>(0,0);
+    tvec.at<double>(1) = tvec_result.at<float>(1,0);
+    tvec.at<double>(2) = tvec_result.at<float>(2,0);
 
       std::cout << "tvec " << tvec << std::endl;
       std::cout << "rot_mat " << rot_mat << std::endl;

@@ -19,13 +19,13 @@ int main(int argc, char **argv) // rosrun spheres_localization pose_estimation /
   // handle map
   std::vector<cv::KeyPoint> map_keypoints;
   cv::Mat map_desc(world_map.size(), world_map[0].descriptor.size(), CV_32F);
-  PtLookupTable map_position_lookup;
+ 
   ROS_INFO("Created containers for map information.");
 
   for(unsigned int i=0; i<world_map.size(); ++i)
   {
     cv::KeyPoint temp_keypoint;
-    temp_keypoint.pt = cv::Point2f(world_map[i].x, world_map[i].y);
+    temp_keypoint.pt = cv::Point2f(0, 0); // value never read
 
     for(unsigned int j=0; j<world_map[i].descriptor.size(); ++j)
     {
