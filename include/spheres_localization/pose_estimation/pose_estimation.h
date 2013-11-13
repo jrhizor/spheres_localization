@@ -54,14 +54,16 @@ namespace enc = sensor_msgs::image_encodings;
 
 typedef std::vector<InterestPoint3D> PtLookupTable;
 
+bool first = true;
+
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             int &numInliers, 
             int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result);
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result,cv::Mat &rvec);
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             const std::vector<cv::DMatch> &good_matches, 
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result);
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result,cv::Mat &rvec);
 
 void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &desc, int &timeDetect, 
             int &timeDescribe)
@@ -162,7 +164,7 @@ void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
              int &numInliers, 
             int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result)
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result,cv::Mat &rvec)
 {
   cv::BruteForceMatcher<cv::L2<float> > matcher;
   std::vector<std::vector<cv::DMatch> > matches;
@@ -217,7 +219,7 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
 
   startMark = clock();
   // std::cout << "BEFORE EPNP" << std::endl;
-  numInliers = pnp(keypoints, keypoints2, good_matches, tvec, q, map_position_lookup, rot_mat_result);
+  numInliers = pnp(keypoints, keypoints2, good_matches, tvec, q, map_position_lookup, rot_mat_result, rvec);
 
   endMark = clock();
 
@@ -231,7 +233,7 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             const std::vector<cv::DMatch> &good_matches,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result)
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result, cv::Mat &rvec)
 {
   std::vector<cv::Point3f> objectPoints;
   std::vector<cv::Point2f> imagePoints;
@@ -261,7 +263,7 @@ int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoi
 
 std::cout << good_matches.size() << std::endl;
 
-  cv::Mat rvec, rotmat, jacobian;
+  cv::Mat rotmat, jacobian;
 
   // default for
   cv::Matx33f cameraMatrix(525.0, 0.0, 319.5, 0.0, 525.0, 239.5, 0.0, 0.0, 1.0);
@@ -271,17 +273,20 @@ std::cout << good_matches.size() << std::endl;
 
   //solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
   
-  int initMinInliers = 50;
+  int initMinInliers = 200;
   int count = 0;
 
-  while(inliers.size()==0 && count < 5)
+  while(inliers.size()==0 && count < 20)
   {
     inliers.clear();
     solvePnPRansac(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, 
-          300, //iterations 
-          1, // reproj error 
+          2000, //iterations 
+          10, // reproj error 
           initMinInliers, // min inliers 
           inliers, CV_EPNP);
+ 
+    if(first) first = false;
+
     if(initMinInliers<imagePoints.size()*.75) initMinInliers++;
     count++;
   }
@@ -405,7 +410,7 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
       numGoodMatches=0, numInliers=0;
   int numQueries = 12;
 
-  cv::Mat tvec, rot_mat;
+  cv::Mat tvec, rvec, rot_mat;
   ::boost::math::quaternion<double> q;
 
   int counter = 0;
@@ -435,7 +440,7 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
       getFeatures(method, img, keypoints, desc, timeDetect, timeDescribe);
 
       findMatchesAndPose(map_desc, desc, map_keypoints, keypoints, numInliers, numGoodMatches, 
-                timeMatch, timePE, img, tvec, q, map_position_lookup, rot_mat);
+                timeMatch, timePE, img, tvec, q, map_position_lookup, rot_mat, rvec);
 
       // output pose 
       // std::cout  << " " <<

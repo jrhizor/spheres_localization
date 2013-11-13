@@ -166,6 +166,11 @@ bool readCamPoseFile(const std_msgs::String::ConstPtr& msg, pcl::TextureMapping<
   cam.height = 480;
   cam.width = 640;
 
+  if(cam.pose(0,3) == 0 && cam.pose(1,3) == 0 && cam.pose(2,3) == 0 )
+  {
+    return false;
+  }
+
   return true;
 
 }
@@ -175,8 +180,11 @@ void chatterCallback(const std_msgs::String::ConstPtr& msg)
   //ROS_INFO("I heard: [%s]", msg->data.c_str());
   pcl::TextureMapping<pcl::PointXYZ>::Camera cam;
 
-  readCamPoseFile(msg, cam);
-  showCameras(cam);
+  
+  if (readCamPoseFile(msg, cam)) 
+  {
+    showCameras(cam);
+  }
 }
 
 int main (int argc, char** argv)
@@ -224,7 +232,7 @@ int main (int argc, char** argv)
   //visu.addPointCloud(cloudFiltered, "cloud");
 
   // Draw the damn map
-  std::ifstream fin("map.txt");
+  std::ifstream fin(argv[2]);
   float valCatcher;
 
   // Read some junk we dont care about
@@ -232,45 +240,36 @@ int main (int argc, char** argv)
 
 
   // Get all of those points
-  for(int i =0; i < atoi(argv[2]); i++)
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr mapCloud(new pcl::PointCloud<pcl::PointXYZ>);
+
+  int red = rand() % 255, green=rand() % 255, blue=rand() % 255;
+  float fred = ((float) red)/255.0f, fgreen = ((float) green)/255.0f,fblue = ((float) blue)/255.0f;
+  
+  for(int i =0; i < atoi(argv[3]); i++)
   {
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr mapCloud(new pcl::PointCloud<pcl::PointXYZ>);
+    float x, y, z;
 
-    int red = rand() % 255, green=rand() % 255, blue=rand() % 255;
-    float fred = ((float) red)/255.0f, fgreen = ((float) green)/255.0f,fblue = ((float) blue)/255.0f;
+    fin >> x >> y >> z;
 
-    for(int j=0;j < atoi(argv[3+i]); j++)
+    // Read in all those junk features
+    for(int k=0; k < 128; k ++)
     {
-      float x, y, z;
-
-      fin >> x >> y >> z;
-
-      // Read in all those junk features
-      for(int k=0; k < 128; k ++)
-      {
-        fin >> valCatcher;
-      }
-
-      // Plot point
-      mapCloud->push_back(pcl::PointXYZ(x,y,z));
-      
-
-      if (j == 0)
-      {
-        std::stringstream ss2;
-        ss2 << "Perspective " << i;
-        visu.addText3D(ss2.str(), pcl::PointXYZ(x,y,z), 0.05, fred, fgreen, fblue, ss2.str ());
-      }
+      fin >> valCatcher;
     }
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler2 (mapCloud,red, green, blue);
-    std::stringstream cloudName;
-    cloudName << "mapCloud" << i;
-    visu.addPointCloud(mapCloud, color_handler2, cloudName.str() );
-    visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, cloudName.str());
 
-
+    // Plot point
+    mapCloud->push_back(pcl::PointXYZ(x,y,z));
+    
   }
+  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler2 (mapCloud,red, green, blue);
+  std::stringstream cloudName;
+  cloudName << "mapCloud";
+  visu.addPointCloud(mapCloud, color_handler2, cloudName.str() );
+  visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, cloudName.str());
+
+
 
   // Set point properties
   //visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "mapCloud");
