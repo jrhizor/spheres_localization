@@ -441,8 +441,6 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
       // std::cout  << " " <<
       //       -1*tvec.at<double>(0,0) << " " << -1*tvec.at<double>(0,1) << " " << -1*tvec.at<double>(0,2) << " " <<
       //       q.R_component_1() <<" "<< q.R_component_2()  << " " << q.R_component_3() << " " << q.R_component_4() << 
-      //       std::endl;
-
 
     cv::Mat tvec_t(3, 1, CV_32FC1);
 

@@ -10,8 +10,8 @@ int main(int argc, char **argv) // rosrun spheres_localization pose_estimation /
   std::string method = argv[2];
   std::string camera_topic = argv[3]; 
 
-  //  export GSCAM_CONFIG="v4l2src device=/dev/video0 ! video/x-raw-rgb,framerate=30/1 ! ffmpegcolorspace"
-
+  // export GSCAM_CONFIG="v4l2src device=/dev/video1 ! video/x-raw-rgb,framerate=30/1 ! ffmpegcolorspace"
+  // rosrun gscam gscam
   // load map
   std::vector<InterestPoint3D> world_map = load_map(map_file_name);
   ROS_INFO("Loaded map with %d points.", int(world_map.size()));
