@@ -1,10 +1,14 @@
 #ifndef SL_REGISTERED_MAPS_H
 #define SL_REGISTERED_MAPS_H
 
+
+#include <tr1/tuple>
+
 #include <stdint.h>
 
 #include <string>
 #include <sstream>
+#include <map>
 
 #include <cassert>
 #include <functional>
@@ -43,6 +47,8 @@
 #include <spheres_localization/utilities/utilities.h>
 #include <spheres_localization/utilities/utilities.h>
 
+typedef std::map<std::tr1::tuple<int,int,int>, std::vector<std::vector<std::vector<double> > > > map_pt_desc;
+
 struct InterestPoint3D
 {
   float x,y,z;
@@ -71,9 +77,9 @@ std::vector<RegImg> load_sequence(const std::string &input_folder, int num_image
     frame.depth_file = input_folder + boost::lexical_cast<std::string>(i) + std::string("_d.png");
     std::string transform_file = input_folder + boost::lexical_cast<std::string>(i) + std::string(".txt");
 
-    std::cout << "\t\tRGB File" << frame.rgb_file << std::endl;
-    std::cout << "\t\tDepth File" << frame.depth_file << std::endl;
-    std::cout << "\t\tTransform File" << transform_file << std::endl;
+    std::cout << "\t\tRGB File " << frame.rgb_file << std::endl;
+    std::cout << "\t\tDepth File " << frame.depth_file << std::endl;
+    std::cout << "\t\tTransform File " << transform_file << std::endl;
 
     // load transformation
     std::ifstream fin(transform_file.c_str());
@@ -213,9 +219,106 @@ std::vector<std::vector<double> > generate_3d_desc(const RegImg &img, const std:
   return map_elements;
 }
 
-void generate_map(const std::vector<RegImg> &reg_imgs, const std::string &output_file, 
-                  const std::string &type, int type_size)
+// float dist(const std::vector<double> &pt1, const std::vector<double> &pt2)
+// {
+//   return sqrt((pt1[0]-pt2[0])*(pt1[0]-pt2[0])+(pt1[1]-pt2[1])*(pt1[1]-pt2[1])+(pt1[2]-pt2[2])*(pt1[2]-pt2[2]));
+// }
+
+float desc_dist(const std::vector<double> &pt1, const std::vector<double> &pt2)
 {
+  float sum = 0;
+
+  for(unsigned int i=3; i<pt1.size(); ++i)
+  {
+    sum += (pt1[i]-pt2[i])*(pt1[i]-pt2[i]);
+  }
+
+  return sqrt(sum);
+}
+
+std::vector<double> average_pt(const std::vector<std::vector<double> > &group)
+{
+  std::vector<double> avg(group[0].size(),0);
+
+  for(unsigned int i=0; i<group.size(); ++i)
+  {
+    for(unsigned int j=0; j<group[i].size(); ++j)
+    {
+      avg[j] += group[i][j];
+    }
+  }
+
+  for(unsigned int i=0; i<avg.size(); ++i)
+  {
+    avg[i] /= group.size();
+  }
+
+  return avg;
+}
+
+void generate_map(const std::vector<RegImg> &reg_imgs, const std::string &output_file, 
+                  const std::string &type, int type_size, float max_desc_error)
+{
+  std::vector<std::vector<double> > output;
+
+  // compute all descriptors
+  for(unsigned int i=0; i<reg_imgs.size(); ++i)
+  {
+    std::cout << "\tProcessing frame " << i << std::endl;
+    std::vector<std::vector<double> > output_lines = generate_3d_desc(reg_imgs[i], type, type_size);
+    output.insert(output.end(), output_lines.begin(), output_lines.end());
+  }
+
+  std::cout << std::endl << "Number of points before handling similar points: " << output.size() << std::endl;
+
+  // handle similar points
+  std::vector<std::vector<double> >::iterator it = output.begin(); 
+  map_pt_desc hash;
+  while(it != output.end())
+  {
+    std::tr1::tuple<int,int,int> approx_loc(round(100*((*it)[0]+0.000001)),round(100*((*it)[1]+0.000001)),round(100*((*it)[2]+0.000001)));
+
+    // if this location isn't found
+    if(hash.find(approx_loc) == hash.end()) 
+    {
+      std::vector<std::vector<std::vector<double> > > new_entry;
+      std::vector<std::vector<double> > new_category;
+      new_category.push_back(*it);
+      new_entry.push_back(new_category);
+
+      hash[approx_loc] = new_entry;
+    } 
+
+    // this location already exists
+    else 
+    {
+      bool added = false;
+
+      for(unsigned int i=0; i<hash[approx_loc].size(); ++i)
+      {
+        if(desc_dist(hash[approx_loc][i][0], *it)<max_desc_error)
+        {
+          added = true;
+
+          hash[approx_loc][i].push_back(*it);
+        }
+      }
+
+      if(!added)
+      {
+        std::vector<std::vector<double> > new_category;
+        new_category.push_back(*it);
+
+        hash[approx_loc].push_back(new_category);
+      }
+    }
+
+    it++;
+  }
+
+  std::cout << std::endl << "Number of locations after handling similar points: " << hash.size() << std::endl;
+
+  // output to file
   std::ofstream fout(output_file.c_str());
 
   fout << reg_imgs.size() << std::endl
@@ -223,30 +326,35 @@ void generate_map(const std::vector<RegImg> &reg_imgs, const std::string &output
 
   fout.precision(15);
 
-  for(unsigned int i=0; i<reg_imgs.size(); ++i)
-  {
-    std::cout << "\tProcessing frame " << i << std::endl;
-    std::vector<std::vector<double> > output_lines = generate_3d_desc(reg_imgs[i], type, type_size);
-    
-    for(unsigned int j=0; j<output_lines.size(); ++j)
+  int counter = 0;
+
+  // for each location
+  for(map_pt_desc::iterator it = hash.begin(); it != hash.end(); it++)
+  { 
+    // for each group
+    for(unsigned int i=0; i < it->second.size(); ++i)
     {
-      ROS_ASSERT(output_lines[j].size()-3==type_size);
+      counter++;
+
+      std::vector<double> avg = average_pt(it->second[i]);
 
       for(unsigned int k=0; k<3; ++k)
       {
-        fout << output_lines[j][k] << " ";
+        fout << avg[k] << " ";
       }
 
       fout << std::endl;
 
-      for(unsigned int k=3; k<output_lines[j].size(); ++k)
+      for(unsigned int k=3; k<avg.size(); ++k)
       {
-        fout << output_lines[j][k] << " ";
+        fout << avg[k] << " ";
       }
 
       fout << std::endl;
     }
   }
+
+  std::cout << std::endl << "Number of unique points after handling similar points: " << counter << std::endl;
 
   fout.close();
 }
