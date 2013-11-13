@@ -5,7 +5,7 @@ int main(int argc, char **argv) // rosrun spheres_localization pose_estimation /
   ros::init(argc, argv, "pose_estimation");
 
   // rosrun spheres_localization pose_estimation /home/jrhizor/Desktop/KinFuSnapshots/map.txt SIFT topicname
-  ROS_ASSERT(argc==4);
+  ROS_ASSERT(argc==5);
   std::string map_file_name = argv[1];
   std::string method = argv[2];
   std::string camera_topic = argv[3]; 

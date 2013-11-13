@@ -377,6 +377,8 @@ class PoseEstimator
 
     // handle updates
     bool new_image;
+
+    std::string imgfilename;
 };
 
 void PoseEstimator::updateRGB(const sensor_msgs::ImageConstPtr& msg)
@@ -400,6 +402,7 @@ PoseEstimator::PoseEstimator(const std::string &camera_topic) : it(n), new_image
 {
   rgb_sub = it.subscribe(camera_topic, 1, &PoseEstimator::updateRGB, this);
   pose_pub = n.advertise<std_msgs::String>("pose_estimation", 1000);
+  imgfilename = camera_topic;
 }
 
 void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_desc, PtLookupTable &map_position_lookup, const std::string &method)
@@ -415,8 +418,9 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
 
   int counter = 0;
 
+  std::vector<cv::Mat> estimates;
 
-  while(ros::ok())
+  while(ros::ok() && estimates.size() < 10)
   {
     ros::spinOnce();
     
@@ -425,9 +429,11 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
     //std::stringstream newss;
     //newss << counter;
     //cv::Mat img = cv::imread("rot/" + newss.str() + ".png", CV_LOAD_IMAGE_GRAYSCALE); //rgbI.image;
-    cv::Mat img = rgbI.image;
-    //counter++;
-    //counter %= 12;
+   
+
+    // cv::Mat img = rgbI.image;
+
+    cv::Mat img = cv::imread(imgfilename, CV_LOAD_IMAGE_GRAYSCALE);  
 
 
     if(img.size().height !=0)
@@ -463,6 +469,8 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
       std::cout << "tvec " << tvec << std::endl;
       std::cout << "rot_mat " << rot_mat << std::endl;
 
+      estimates.push_back(tvec);
+
       std::stringstream ss;
       ss << tvec.at<double>(0) << " "
          << tvec.at<double>(1) << " "
@@ -485,6 +493,29 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
       pose_pub.publish(msg);
     }
   }
+
+
+  cv::Mat avg_tvec(3, 1, CV_32FC1);
+
+  avg_tvec.at<double>(0) = 0;
+  avg_tvec.at<double>(1) = 0;
+  avg_tvec.at<double>(2) = 0;
+
+  for(int i=0; i<estimates.size(); ++i)
+  {
+    avg_tvec.at<double>(0) += estimates[i].at<double>(0);
+    avg_tvec.at<double>(1) += estimates[i].at<double>(1);
+    avg_tvec.at<double>(2) += estimates[i].at<double>(2);
+  }
+
+  avg_tvec.at<double>(0) /= estimates.size();
+  avg_tvec.at<double>(1) /= estimates.size();
+  avg_tvec.at<double>(2) /= estimates.size();
+
+  std::cout << "AVG TVEC: " << std::endl
+            << "(" << avg_tvec.at<double>(0) << ", " 
+              << avg_tvec.at<double>(1) << ", " 
+              << avg_tvec.at<double>(2) << ")" << std::endl;
 }
 
 #endif
