@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
 	pcl_ros
   roscpp
+  message_generation
   sensor_msgs
   std_msgs
 )
@@ -31,11 +32,12 @@ find_package(Boost REQUIRED)
 #######################################
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  FILES
+  pose.msg
+  point_match.msg
+  point_match_array.msg
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -62,6 +64,7 @@ find_package(Boost REQUIRED)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES spheres_localization
+CATKIN_DEPENDS message_runtime
 #  CATKIN_DEPENDS cv_bridge freenect_camera image_transport roscpp sensor_msgs std_msgs
 #  DEPENDS system_lib
 )
