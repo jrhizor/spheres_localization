@@ -50,6 +50,10 @@
 #include <cv_bridge/cv_bridge.h>
 #include "std_msgs/String.h"
 
+#include <spheres_localization/pose.h>
+#include <spheres_localization/point_match.h>
+#include <spheres_localization/point_match_array.h>
+
 namespace enc = sensor_msgs::image_encodings;
 
 typedef std::vector<InterestPoint3D> PtLookupTable;
