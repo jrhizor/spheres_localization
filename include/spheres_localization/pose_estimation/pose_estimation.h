@@ -403,7 +403,7 @@ void PoseEstimator::updateRGB(const sensor_msgs::ImageConstPtr& msg)
 PoseEstimator::PoseEstimator(const std::string &camera_topic) : it(n), new_image(false)
 {
   rgb_sub = it.subscribe(camera_topic, 1, &PoseEstimator::updateRGB, this);
-  pose_pub = n.advertise<std_msgs::String>("pose_estimation", 1000);
+  pose_pub = n.advertise<spheres_localization::pose>("pose_estimation", 1000);
 }
 
 void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_desc, PtLookupTable &map_position_lookup, const std::string &method)
@@ -484,8 +484,26 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
 
       std::cout << ss.str() << std::endl << std::endl;
 
-      std_msgs::String msg;
-      msg.data = ss.str();
+      spheres_localization::pose msg;
+      const boost::array<float,9> rot_mat_vec = 
+      {
+        rot_mat.at<float>(0,0),
+        rot_mat.at<float>(0,1),
+        rot_mat.at<float>(0,2),
+        rot_mat.at<float>(1,0),
+        rot_mat.at<float>(1,1),
+        rot_mat.at<float>(1,2),
+        rot_mat.at<float>(2,0),
+        rot_mat.at<float>(2,1),
+        rot_mat.at<float>(2,2)
+      };
+
+      msg.rot_mat = rot_mat_vec;
+
+      msg.x = tvec.at<double>(0);
+      msg.y = tvec.at<double>(1);
+      msg.z = tvec.at<double>(2);
+
       pose_pub.publish(msg);
     }
   }
