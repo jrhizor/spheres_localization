@@ -63,11 +63,13 @@ bool first = true;
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             int &numInliers, 
             int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result,cv::Mat &rvec);
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result,cv::Mat &rvec,
+            spheres_localization::point_match_array &pmatches_msg);
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             const std::vector<cv::DMatch> &good_matches, 
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result,cv::Mat &rvec);
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result,cv::Mat &rvec,
+            spheres_localization::point_match_array &pmatches_msg);
 
 void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::KeyPoint> &keypoints, cv::Mat &desc, int &timeDetect, 
             int &timeDescribe)
@@ -168,7 +170,8 @@ void getFeatures(const std::string &method, const cv::Mat &img, std::vector<cv::
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
              int &numInliers, 
             int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result,cv::Mat &rvec)
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result,cv::Mat &rvec,
+            spheres_localization::point_match_array &pmatches_msg)
 {
   cv::BruteForceMatcher<cv::L2<float> > matcher;
   std::vector<std::vector<cv::DMatch> > matches;
@@ -223,7 +226,7 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
 
   startMark = clock();
   // std::cout << "BEFORE EPNP" << std::endl;
-  numInliers = pnp(keypoints, keypoints2, good_matches, tvec, q, map_position_lookup, rot_mat_result, rvec);
+  numInliers = pnp(keypoints, keypoints2, good_matches, tvec, q, map_position_lookup, rot_mat_result, rvec, pmatches_msg);
 
   endMark = clock();
 
@@ -237,7 +240,8 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
 
 int pnp(const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             const std::vector<cv::DMatch> &good_matches,
-            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result, cv::Mat &rvec)
+            cv::Mat &tvec, ::boost::math::quaternion<double> &q, PtLookupTable &map_position_lookup, cv::Mat &rot_mat_result, cv::Mat &rvec,
+            spheres_localization::point_match_array &pmatches_msg)
 {
   std::vector<cv::Point3f> objectPoints;
   std::vector<cv::Point2f> imagePoints;
@@ -295,6 +299,28 @@ std::cout << good_matches.size() << std::endl;
     count++;
   }
   
+
+  // now we have inlier indices
+  std::vector<spheres_localization::point_match> pmatch_vec;
+
+  for(int i=0; i<inliers.size(); ++i)
+  {
+    int index = inliers[i];
+
+    spheres_localization::point_match match;
+
+    match.u = imagePoints[index].x;
+    match.v = imagePoints[index].y;
+    match.x = objectPoints[index].x;
+    match.y = objectPoints[index].y;
+    match.z = objectPoints[index].z;
+
+    pmatch_vec.push_back(match);
+  }
+
+  pmatches_msg.matches = pmatch_vec;
+
+
 
   Rodrigues(rvec, rotmat, jacobian);
 
@@ -378,6 +404,7 @@ class PoseEstimator
 
     // publishing to visualizer
     ros::Publisher pose_pub;
+    ros::Publisher point_match_pub;
 
     // handle updates
     bool new_image;
@@ -404,6 +431,7 @@ PoseEstimator::PoseEstimator(const std::string &camera_topic) : it(n), new_image
 {
   rgb_sub = it.subscribe(camera_topic, 1, &PoseEstimator::updateRGB, this);
   pose_pub = n.advertise<spheres_localization::pose>("pose_estimation", 1000);
+  point_match_pub = n.advertise<spheres_localization::point_match_array>("point_match_array", 1000);
 }
 
 void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_desc, PtLookupTable &map_position_lookup, const std::string &method)
@@ -443,8 +471,10 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
 
       getFeatures(method, img, keypoints, desc, timeDetect, timeDescribe);
 
+      spheres_localization::point_match_array pmatches_msg;
+
       findMatchesAndPose(map_desc, desc, map_keypoints, keypoints, numInliers, numGoodMatches, 
-                timeMatch, timePE, img, tvec, q, map_position_lookup, rot_mat, rvec);
+                timeMatch, timePE, img, tvec, q, map_position_lookup, rot_mat, rvec, pmatches_msg);
 
       // output pose 
       // std::cout  << " " <<
@@ -505,6 +535,8 @@ void PoseEstimator::run(std::vector<cv::KeyPoint> &map_keypoints, cv::Mat &map_d
       msg.z = tvec.at<double>(2);
 
       pose_pub.publish(msg);
+
+      point_match_pub.publish(pmatches_msg);
     }
   }
 }
