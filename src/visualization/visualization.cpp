@@ -19,20 +19,26 @@
 
 #include <cmath>
 
+#include <exception>
 
-// Global badness
+
+// TODO: Fix global badness, maybe a singleton
 pcl::visualization::PCLVisualizer visu ("cameras");
 
-void  INThandler(int sig)
+class InvalidFileException : public std::exception
 {
+public:
+   InvalidFileException(char* filename) { m_filename = filename; }
 
-     signal(sig, SIG_IGN);
-     exit(0);
+   char* m_filename;
+};
 
-}
-
-/** \brief Display a 3D representation showing the a cloud and a list of camera with their 6DOf poses */
-void showCameras (pcl::TextureMapping<pcl::PointXYZ>::Camera cam)
+/**
+ * Function: redrawCameras
+ * Input: PCL file containing camera position data (refer to PCL documentation)
+ * Output: Redraws the camera frustrum in the visualizer window
+ **/
+void redrawCameras (pcl::TextureMapping<pcl::PointXYZ>::Camera cam)
 {
   // read current camera
   double focal = cam.focal_length;
@@ -115,19 +121,15 @@ void showCameras (pcl::TextureMapping<pcl::PointXYZ>::Camera cam)
 
 }
 
-/** \brief Helper function that jump to a specific line of a text file */
-std::ifstream& GotoLine(std::ifstream& file, unsigned int num)
-{
-  file.seekg (std::ios::beg);
-  for(int i=0; i < num - 1; ++i)
-  {
-    file.ignore (std::numeric_limits<std::streamsize>::max (),'\n');
-  }
-  return (file);
-}
-
-/** \brief Helper function that reads a camera file outputed by Kinfu */
-bool readCamPoseFile(const std_msgs::String::ConstPtr& msg, pcl::TextureMapping<pcl::PointXYZ>::Camera &cam)
+/**
+ * Function: readCamPoseStreamMsg
+ * Input: A String message from the ros data stream
+ *        Camera position data (Refer to PCL documentation)
+ * Output: Camera position data
+ *         A boolean indicating if the data was valid
+ **/
+// TODO: Rename this function to something more succinct 
+bool readCamPoseStreamMsg(const std_msgs::String::ConstPtr& msg, pcl::TextureMapping<pcl::PointXYZ>::Camera &cam)
 {
 
   // Declare function variables
@@ -166,6 +168,7 @@ bool readCamPoseFile(const std_msgs::String::ConstPtr& msg, pcl::TextureMapping<
   cam.height = 480;
   cam.width = 640;
 
+  // Check that the data is valid, return false if failed
   if(cam.pose(0,3) == 0 && cam.pose(1,3) == 0 && cam.pose(2,3) == 0 )
   {
     return false;
@@ -175,42 +178,46 @@ bool readCamPoseFile(const std_msgs::String::ConstPtr& msg, pcl::TextureMapping<
 
 }
 
+/**
+ * Function: chatterCallback
+ * Input: A String message from the ros data stream
+ * Output: Processes the data from the ros stream and updates the visualization
+ **/
+// TODO: Rename this callback to something more descriptive
 void chatterCallback(const std_msgs::String::ConstPtr& msg)
 {
   //ROS_INFO("I heard: [%s]", msg->data.c_str());
   pcl::TextureMapping<pcl::PointXYZ>::Camera cam;
 
   
-  if (readCamPoseFile(msg, cam)) 
+  if (readCamPoseStreamMsg(msg, cam)) 
   {
-    showCameras(cam);
+    redrawCameras(cam);
   }
 }
 
-int main (int argc, char** argv)
+/**
+ * Function: loadSceneCloud
+ * Input: A Filename for the scene's pointcloud
+ * Output: The scene is loaded into the visualizer
+ * Throws: InvalidFileException
+ **/
+void loadSceneCloud(char* sceneFilename) 
 {
-  srand (time(NULL));
-
-  // Prepare ros for listening
-  ros::init(argc, argv, "listener");
-  ros::NodeHandle n;
-  ros::Subscriber sub = n.subscribe("pose_estimation", 1000, chatterCallback);
- 
   // Prepare point cloud data structure
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloudFiltered (new pcl::PointCloud<pcl::PointXYZ>);
-  // Prepare visualization object
 
   // Load up the map pointcloud
-  PCL_INFO ("\nLoading Map Point Cloud %s...\n", argv[1]);
-  if(pcl::io::loadPCDFile<pcl::PointXYZ> (argv[1], *cloud) == -1)
+  PCL_INFO ("\nLoading Map Point Cloud %s...\n", sceneFilename);
+  if(pcl::io::loadPCDFile<pcl::PointXYZ> (sceneFilename, *cloud) == -1)
   {
     // Return failure to load
-    PCL_ERROR("Could not load point cloud %s \n", argv[1]);
-    return -1;
+    PCL_ERROR("Could not load point cloud %s \n", sceneFilename);
+    throw InvalidFileException(sceneFilename);
   }
   
-  // Shrink the pointcloud to the same scale as the camera data
+  // Shrink the pointcloud to the same scale as the camera data (smaller distance between points)
   for(size_t i =0; i < cloud->size (); ++i)
   {
     cloud->points[i].x*=0.006;
@@ -219,41 +226,45 @@ int main (int argc, char** argv)
 
   }
 
-  // Downsample the pointcloud
+  // Downsample the pointcloud (less points in the cloud)
   pcl::VoxelGrid<pcl::PointXYZ> sor;
   sor.setInputCloud(cloud);
   sor.setLeafSize(0.01f,0.01f,0.01f);
   sor.filter(*cloudFiltered);
 
-  // add the mesh's cloud (colored on Z axis)
+  // Add the mesh's cloud (colored on X axis)
   pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloudFiltered, "x");
-  //pcl::visualization::PointCloudColorHandlerRandom<pcl::PointXYZ> color_handler (cloud);
   visu.addPointCloud (cloudFiltered, color_handler, "cloud");
-  //visu.addPointCloud(cloudFiltered, "cloud");
+}
 
-  // Draw the damn map
-  std::ifstream fin(argv[2]);
+void loadInterestMap(char* mapFilename)
+{
+  // Initialize the pseudorandom number generator
+  srand (time(NULL));
+
+  // Prepare to read the map file
+  std::ifstream fin(mapFilename);
   float valCatcher;
 
-  // Read some junk we dont care about
+  // Fail and close if map file is not valid
+  if (!fin.good())
+    throw InvalidFileException(mapFilename);
+
+  // Prime the map file by discarding the first two values
   fin >> valCatcher >> valCatcher;
 
-
-  // Get all of those points
-
+  // Get all of those points from the map, skip the SIFT features
   pcl::PointCloud<pcl::PointXYZ>::Ptr mapCloud(new pcl::PointCloud<pcl::PointXYZ>);
-
-  int red = rand() % 255, green=rand() % 255, blue=rand() % 255;
-  float fred = ((float) red)/255.0f, fgreen = ((float) green)/255.0f,fblue = ((float) blue)/255.0f;
   
-  for(int i =0; i < atoi(argv[3]); i++)
+  while(fin.good())
   {
 
     float x, y, z;
 
+    // Read the position of the keypoint
     fin >> x >> y >> z;
 
-    // Read in all those junk features
+    // Read and discard the sift features
     for(int k=0; k < 128; k ++)
     {
       fin >> valCatcher;
@@ -263,31 +274,55 @@ int main (int argc, char** argv)
     mapCloud->push_back(pcl::PointXYZ(x,y,z));
     
   }
+
+  // Add the map point cloud with a random color
+  int red = rand() % 255, green=rand() % 255, blue=rand() % 255;
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler2 (mapCloud,red, green, blue);
   std::stringstream cloudName;
   cloudName << "mapCloud";
   visu.addPointCloud(mapCloud, color_handler2, cloudName.str() );
-  visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, cloudName.str());
+  visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, cloudName.str());  
+}
 
 
+int main (int argc, char** argv)
+{
 
-  // Set point properties
-  //visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "mapCloud");
+  // Fail and die if incorrect number of arguments was given
+  if( argc != 3 )
+  {
+    std::cout << "ERROR: Incorrect number of arguments given" << std::endl
+              << "./application mapPointCloud interestPointFile" << std::endl;
+    return -1;
+  }
 
-  // add a coordinate system
+  // Prepare ros for listening to the data stream
+  ros::init(argc, argv, "listener");
+  ros::NodeHandle n;
+  ros::Subscriber sub = n.subscribe("pose_estimation", 1000, chatterCallback);
+
+  // Do all of the map loading
+  try
+  {
+    // Load the scene cloud
+    loadSceneCloud(argv[1]);
+
+    // Load the interest points
+    loadInterestMap(argv[2]);
+  }
+  catch(InvalidFileException e)
+  {
+    std::cout << "ERROR: File: " << e.m_filename << " does not appear to be valid." << std::endl;   
+    return -1;
+  }
+
+  // Finish initializing the visualizer
   visu.addCoordinateSystem (1.0);
-
-  // reset camera
   visu.resetCamera ();
   
-  // Display cameras to user
-  //(PCL_INFO ("\nDisplaying cameras. Press \'q\' to continue texture mapping\n");
-  //showCameras(my_cams, cloudFiltered, visu);
-  signal(SIGINT, INThandler);
 
-  
   // Spin through ros callbacks and pcl window monitoring
-  while(true)
+  while(ros::ok())
   {
     visu.spinOnce();
     ros::spinOnce();
