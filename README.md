@@ -11,6 +11,7 @@ spheres_localization
 	rosrun spheres_localization visualization world_point_cloud map_file camera_stream
 
 To use a bag file for visualization:
+
 	rosbag play bag_file -l -r 0.1
 
 # Dependencies
