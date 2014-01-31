@@ -39,6 +39,8 @@ cv_bridge::CvImage rgbI;
 int lastMatchCount = 0;
 
 bool new_image;
+bool cameraTrack = true;
+Eigen::Affine3f lastPose;
 
 class InvalidFileException : public std::exception
 {
@@ -228,11 +230,17 @@ void imageHandleCallback(const sensor_msgs::ImageConstPtr& msg)
 
   // Prepare new image for rendering in the visualizer
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr imageCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr imageCloud2 (new pcl::PointCloud<pcl::PointXYZRGB>);
+
   cv::Mat img = rgbI.image;
 
 
   //float factor = 800.0f;
   // Camera offset: (0.1f,0.1f,2.5f)
+
+  // TODO: Allow the image to be posted stationary
+  // TODO: Make the image get bigger when you make it stationary
+  // TODO: Post the controls on the screen, as well as enable an escape button
 
   for(size_t i = 0; i < img.size().height; i++)
   { 
@@ -246,14 +254,23 @@ void imageHandleCallback(const sensor_msgs::ImageConstPtr& msg)
       tempPoint.g = img.at<cv::Vec3b>( i, j )[1];
       tempPoint.b = img.at<cv::Vec3b>( i, j )[0];
 
-      tempPoint = pcl::transformPoint (tempPoint, visu.getViewerPose());
       imageCloud->push_back(tempPoint);
     }
   }
 
   // Remove the old imagecloud from the visualizer and add the new one
+  if(cameraTrack)
+  {
+    pcl::transformPointCloud (*imageCloud, *imageCloud2 , visu.getViewerPose());
+    lastPose = visu.getViewerPose();
+  }
+  else
+  {
+    pcl::transformPointCloud (*imageCloud, *imageCloud2, lastPose);        
+  }
+  
   visu.removePointCloud("imageCloud");
-  visu.addPointCloud(imageCloud,"imageCloud");
+  visu.addPointCloud(imageCloud2,"imageCloud");
 
 }
 
@@ -291,7 +308,7 @@ void correspondenceCallback(const spheres_localization::point_match_array& msg)
     p2.z = msg.matches[i].z;
 
     ss << "MatchLine" << i;
-    visu.addLine (pcl::transformPoint (p1, visu.getViewerPose()), p2,ss.str ());
+    visu.addLine (pcl::transformPoint (p1, lastPose), p2,ss.str ());
     visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 1.0, ss.str());
     ss.str ("");
   }
@@ -336,7 +353,7 @@ void loadSceneCloud(char* sceneFilename)
   sor.filter(*cloudFiltered);
 
   // Add the mesh's cloud (colored on X axis)
-  pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloudFiltered, "x");
+  pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloudFiltered, "z");
   visu.addPointCloud (cloudFiltered, color_handler, "cloud");
 }
 
@@ -384,6 +401,8 @@ void loadInterestMap(char* mapFilename)
     
   }
 
+
+
   // Add the map point cloud with a random color
   int red = rand() % 255, green=rand() % 255, blue=rand() % 255;
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler2 (mapCloud,red, green, blue);
@@ -417,6 +436,18 @@ void redrawImageOverlay()
 
 }
 
+void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
+                        void* viewer_void)
+{
+  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *> (viewer_void);
+  if (event.getKeySym () == "p" && event.keyDown ())
+  {
+    std::cout << "p pressed, stopping tracking" << std::endl;
+
+    cameraTrack = !cameraTrack;
+  }
+}
+
 int main (int argc, char** argv)
 {
 
@@ -442,6 +473,10 @@ int main (int argc, char** argv)
 
   // Correspondence handling
   ros::Subscriber subCorresp = n.subscribe("point_match_array", 1000, correspondenceCallback);
+
+  // Keyboard Listener
+  visu.registerKeyboardCallback (keyboardEventOccurred, (void*)&visu);
+
 
   // Do all of the map loading
   try
