@@ -14,16 +14,31 @@
 #include <pcl/io/vtk_lib_io.h>
 
 #include "ros/ros.h"
-#include "std_msgs/String.h"
 #include  <signal.h>
 
 #include <cmath>
-
 #include <exception>
 
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+#include "std_msgs/String.h"
+
+#include <spheres_localization/pose.h>
+#include <spheres_localization/point_match.h>
+#include <spheres_localization/point_match_array.h>
+
+namespace enc = sensor_msgs::image_encodings;
 
 // TODO: Fix global badness, maybe a singleton
 pcl::visualization::PCLVisualizer visu ("cameras");
+cv_bridge::CvImagePtr rgb;
+cv_bridge::CvImage rgbI;
+
+int lastMatchCount = 0;
+
+bool new_image;
 
 class InvalidFileException : public std::exception
 {
@@ -129,33 +144,25 @@ void redrawCameras (pcl::TextureMapping<pcl::PointXYZ>::Camera cam)
  *         A boolean indicating if the data was valid
  **/
 // TODO: Rename this function to something more succinct 
-bool readCamPoseStreamMsg(const std_msgs::String::ConstPtr& msg, pcl::TextureMapping<pcl::PointXYZ>::Camera &cam)
+bool readCamPoseStreamMsg(const spheres_localization::pose& msg, pcl::TextureMapping<pcl::PointXYZ>::Camera &cam)
 {
-
-  // Declare function variables
-  double val;
-  std::stringstream dataStream;
-
-  // Initialize the stream to read from
-  dataStream.str(msg->data);
-  
   // Translation Information
-  dataStream >> val; cam.pose (0,3)=val; //TX
-  dataStream >> val; cam.pose (1,3)=val; //TY
-  dataStream >> val; cam.pose (2,3)=val; //TZ
+  cam.pose (0,3)=msg.x; //TX
+  cam.pose (1,3)=msg.y; //TY
+  cam.pose (2,3)=msg.z; //TZ
 
   // Rotation Matrix
-  dataStream >> val; cam.pose (0,0)=val;
-  dataStream >> val; cam.pose (0,1)=val;
-  dataStream >> val; cam.pose (0,2)=val;
+  cam.pose (0,0)=msg.rot_mat[0];
+  cam.pose (0,1)=msg.rot_mat[1];
+  cam.pose (0,2)=msg.rot_mat[2];
 
-  dataStream >> val; cam.pose (1,0)=val;
-  dataStream >> val; cam.pose (1,1)=val;
-  dataStream >> val; cam.pose (1,2)=val;
+  cam.pose (1,0)=msg.rot_mat[3];
+  cam.pose (1,1)=msg.rot_mat[4];
+  cam.pose (1,2)=msg.rot_mat[5];
 
-  dataStream >> val; cam.pose (2,0)=val;
-  dataStream >> val; cam.pose (2,1)=val;
-  dataStream >> val; cam.pose (2,2)=val;
+  cam.pose (2,0)=msg.rot_mat[6];
+  cam.pose (2,1)=msg.rot_mat[7];
+  cam.pose (2,2)=msg.rot_mat[8];
 
   // Scale
   cam.pose (3,0) = 0.0;
@@ -179,21 +186,117 @@ bool readCamPoseStreamMsg(const std_msgs::String::ConstPtr& msg, pcl::TextureMap
 }
 
 /**
- * Function: chatterCallback
- * Input: A String message from the ros data stream
+ * Function: poseEstimateCallback
+ * Input: A special pose message from the ros data stream
  * Output: Processes the data from the ros stream and updates the visualization
  **/
-// TODO: Rename this callback to something more descriptive
-void chatterCallback(const std_msgs::String::ConstPtr& msg)
+void poseEstimateCallback(const spheres_localization::pose& msg)
 {
   //ROS_INFO("I heard: [%s]", msg->data.c_str());
   pcl::TextureMapping<pcl::PointXYZ>::Camera cam;
 
-  
   if (readCamPoseStreamMsg(msg, cam)) 
   {
     redrawCameras(cam);
   }
+
+}
+
+/**
+ * Function: imageHandleCallback
+ * Input: A special camera message from the ros data stream
+ * Output: Processes the data from the ros stream and updates the visualization
+ **/
+void imageHandleCallback(const sensor_msgs::ImageConstPtr& msg)
+{
+
+  try
+  {
+    rgb = cv_bridge::toCvCopy(msg, enc::BGR8);
+  }
+  catch (cv_bridge::Exception& e)
+  {
+    ROS_ERROR("cv_bridge exception: %s", e.what());
+    return;
+  }
+
+  rgbI = *rgb;
+
+  new_image = true;
+
+  float factor = 800.0f;
+
+  // Prepare new image for rendering in the visualizer
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr imageCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+  cv::Mat img = rgbI.image;
+
+
+  //float factor = 800.0f;
+  // Camera offset: (0.1f,0.1f,2.5f)
+
+  for(size_t i = 0; i < img.size().height; i++)
+  { 
+    for(size_t j = 0; j < img.size().width; j++)
+    {
+      pcl::PointXYZRGB tempPoint;
+      tempPoint.x = ((float)-j)/factor + 0.1f;
+      tempPoint.y = ((float)-i)/factor + 0.1f;
+      tempPoint.z = 2.5f;
+      tempPoint.r = img.at<cv::Vec3b>( i, j )[2];
+      tempPoint.g = img.at<cv::Vec3b>( i, j )[1];
+      tempPoint.b = img.at<cv::Vec3b>( i, j )[0];
+
+      tempPoint = pcl::transformPoint (tempPoint, visu.getViewerPose());
+      imageCloud->push_back(tempPoint);
+    }
+  }
+
+  // Remove the old imagecloud from the visualizer and add the new one
+  visu.removePointCloud("imageCloud");
+  visu.addPointCloud(imageCloud,"imageCloud");
+
+}
+
+/**
+ * Function: correspondenceCallback
+ * Input: A special point correspondence message from the ros data stream
+ * Output: Processes the data from the ros stream and updates the visualization
+ **/
+void correspondenceCallback(const spheres_localization::point_match_array& msg)
+{
+  //ROS_INFO("I heard: [%s]", msg->data.c_str());
+  // Store the correspondences locally
+  // float factor = 800.0f;
+  // Camera offset: (0.1f,0.1f,2.5f)
+  std::stringstream ss;
+  pcl::PointXYZ p1, p2;
+  float factor = 800.0f;
+
+  for(size_t i=0; i < lastMatchCount; i++)
+  {
+    ss << "MatchLine" << i;
+    visu.removeShape(ss.str());   
+    ss.str (""); 
+  }
+
+
+  for(size_t i=0; i < msg.matches.size(); i++)
+  {
+    p1.x = -msg.matches[i].u/factor +0.1f;
+    p1.y = -msg.matches[i].v/factor +0.1f;
+    p1.z = 2.48f;
+
+    p2.x = msg.matches[i].x;
+    p2.y = msg.matches[i].y;
+    p2.z = msg.matches[i].z;
+
+    ss << "MatchLine" << i;
+    visu.addLine (pcl::transformPoint (p1, visu.getViewerPose()), p2,ss.str ());
+    visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 1.0, ss.str());
+    ss.str ("");
+  }
+
+  lastMatchCount = msg.matches.size();
 }
 
 /**
@@ -237,6 +340,12 @@ void loadSceneCloud(char* sceneFilename)
   visu.addPointCloud (cloudFiltered, color_handler, "cloud");
 }
 
+/**
+ * Function: loadInterestMap
+ * Input: A Filename for the interest point map
+ * Output: The interest points are loaded into the visualizer
+ * Throws: InvalidFileException
+ **/
 void loadInterestMap(char* mapFilename)
 {
   // Initialize the pseudorandom number generator
@@ -284,22 +393,55 @@ void loadInterestMap(char* mapFilename)
   visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, cloudName.str());  
 }
 
+/**
+ * Function: redrawImageOverlay
+ * Input: The camera image and the list of correspondences
+ * Output: The image is redrawn onto the visualizer along with the correspondences
+ * Throws: InvalidFileException
+ **/
+void redrawImageOverlay()
+{
+  // Define Function Variables
+
+  // Remove the old image pointcloud
+
+  // Remove the old correspondences
+
+  // Convert the image into a pointcloud
+
+  // Transform the image by the camera position and orientation
+
+  // Offset the image to a good position
+
+  // Draw the correspondences
+
+}
 
 int main (int argc, char** argv)
 {
 
   // Fail and die if incorrect number of arguments was given
-  if( argc != 3 )
+  if( argc != 4 )
   {
     std::cout << "ERROR: Incorrect number of arguments given" << std::endl
-              << "./application mapPointCloud interestPointFile" << std::endl;
+              << "./application mapPointCloud interestPointFile cameraRosTopic" << std::endl;
     return -1;
   }
 
   // Prepare ros for listening to the data stream
   ros::init(argc, argv, "listener");
   ros::NodeHandle n;
-  ros::Subscriber sub = n.subscribe("pose_estimation", 1000, chatterCallback);
+
+  // Pose Estimation handling
+  ros::Subscriber subPose = n.subscribe("pose_estimation", 1000, poseEstimateCallback);
+
+  // Image Handling
+  image_transport::ImageTransport it(n);
+  image_transport::Subscriber rgb_sub;
+  rgb_sub = it.subscribe(argv[3], 1, imageHandleCallback);
+
+  // Correspondence handling
+  ros::Subscriber subCorresp = n.subscribe("point_match_array", 1000, correspondenceCallback);
 
   // Do all of the map loading
   try
@@ -324,8 +466,12 @@ int main (int argc, char** argv)
   // Spin through ros callbacks and pcl window monitoring
   while(ros::ok())
   {
+    // Do the spinning
     visu.spinOnce();
     ros::spinOnce();
+
+    // Redraw the image and the point correspondences
+
   }
 
   return (0);
