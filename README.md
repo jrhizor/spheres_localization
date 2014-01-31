@@ -19,3 +19,12 @@ To use a bag file for visualization:
 * PCL
 * OpenCV
 * Boost
+
+## Visualization Example for Garage Dataset
+	roscore
+
+	rosbag play ~/garage_dataset/left3ft.bag -l -r 0.1
+
+	rosrun spheres_localization pose_estimation /home/jared/garage_dataset/KinFuSnapshots/map.txt SIFT /camera/rgb/image_color
+
+	rosrun spheres_localization visualization /home/jared/garage_dataset/world.pcd /home/jared/garage_dataset/KinFuSnapshots/map.txt /camera/rgb/image_color
