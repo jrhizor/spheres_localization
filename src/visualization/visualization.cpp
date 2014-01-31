@@ -40,6 +40,10 @@ int lastMatchCount = 0;
 
 bool new_image;
 bool cameraTrack = true;
+
+bool escTriggered = false;
+bool paused = false;
+
 Eigen::Affine3f lastPose;
 
 class InvalidFileException : public std::exception
@@ -197,7 +201,7 @@ void poseEstimateCallback(const spheres_localization::pose& msg)
   //ROS_INFO("I heard: [%s]", msg->data.c_str());
   pcl::TextureMapping<pcl::PointXYZ>::Camera cam;
 
-  if (readCamPoseStreamMsg(msg, cam)) 
+  if (readCamPoseStreamMsg(msg, cam) && !paused) 
   {
     redrawCameras(cam);
   }
@@ -212,66 +216,68 @@ void poseEstimateCallback(const spheres_localization::pose& msg)
 void imageHandleCallback(const sensor_msgs::ImageConstPtr& msg)
 {
 
-  try
+  if (!paused)
   {
-    rgb = cv_bridge::toCvCopy(msg, enc::BGR8);
-  }
-  catch (cv_bridge::Exception& e)
-  {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
-    return;
-  }
-
-  rgbI = *rgb;
-
-  new_image = true;
-
-  float factor = 800.0f;
-
-  // Prepare new image for rendering in the visualizer
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr imageCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr imageCloud2 (new pcl::PointCloud<pcl::PointXYZRGB>);
-
-  cv::Mat img = rgbI.image;
-
-
-  //float factor = 800.0f;
-  // Camera offset: (0.1f,0.1f,2.5f)
-
-  // TODO: Allow the image to be posted stationary
-  // TODO: Make the image get bigger when you make it stationary
-  // TODO: Post the controls on the screen, as well as enable an escape button
-
-  for(size_t i = 0; i < img.size().height; i++)
-  { 
-    for(size_t j = 0; j < img.size().width; j++)
+    try
     {
-      pcl::PointXYZRGB tempPoint;
-      tempPoint.x = ((float)-j)/factor + 0.1f;
-      tempPoint.y = ((float)-i)/factor + 0.1f;
-      tempPoint.z = 2.5f;
-      tempPoint.r = img.at<cv::Vec3b>( i, j )[2];
-      tempPoint.g = img.at<cv::Vec3b>( i, j )[1];
-      tempPoint.b = img.at<cv::Vec3b>( i, j )[0];
-
-      imageCloud->push_back(tempPoint);
+      rgb = cv_bridge::toCvCopy(msg, enc::BGR8);
     }
-  }
+    catch (cv_bridge::Exception& e)
+    {
+      ROS_ERROR("cv_bridge exception: %s", e.what());
+      return;
+    }
 
-  // Remove the old imagecloud from the visualizer and add the new one
-  if(cameraTrack)
-  {
-    pcl::transformPointCloud (*imageCloud, *imageCloud2 , visu.getViewerPose());
-    lastPose = visu.getViewerPose();
-  }
-  else
-  {
-    pcl::transformPointCloud (*imageCloud, *imageCloud2, lastPose);        
-  }
-  
-  visu.removePointCloud("imageCloud");
-  visu.addPointCloud(imageCloud2,"imageCloud");
+    rgbI = *rgb;
 
+    new_image = true;
+
+    float factor = 800.0f;
+
+    // Prepare new image for rendering in the visualizer
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr imageCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr imageCloud2 (new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    cv::Mat img = rgbI.image;
+
+
+    //float factor = 800.0f;
+    // Camera offset: (0.1f,0.1f,2.5f)
+
+    // TODO: Allow the image to be posted stationary
+    // TODO: Make the image get bigger when you make it stationary
+    // TODO: Post the controls on the screen, as well as enable an escape button
+
+    for(size_t i = 0; i < img.size().height; i++)
+    { 
+      for(size_t j = 0; j < img.size().width; j++)
+      {
+        pcl::PointXYZRGB tempPoint;
+        tempPoint.x = ((float)-j)/factor + 0.1f;
+        tempPoint.y = ((float)-i)/factor + 0.1f;
+        tempPoint.z = 2.5f;
+        tempPoint.r = img.at<cv::Vec3b>( i, j )[2];
+        tempPoint.g = img.at<cv::Vec3b>( i, j )[1];
+        tempPoint.b = img.at<cv::Vec3b>( i, j )[0];
+
+        imageCloud->push_back(tempPoint);
+      }
+    }
+
+    // Remove the old imagecloud from the visualizer and add the new one
+    if(cameraTrack)
+    {
+      pcl::transformPointCloud (*imageCloud, *imageCloud2 , visu.getViewerPose());
+      lastPose = visu.getViewerPose();
+    }
+    else
+    {
+      pcl::transformPointCloud (*imageCloud, *imageCloud2, lastPose);        
+    }
+    
+    visu.removePointCloud("imageCloud");
+    visu.addPointCloud(imageCloud2,"imageCloud");
+  }
 }
 
 /**
@@ -289,31 +295,34 @@ void correspondenceCallback(const spheres_localization::point_match_array& msg)
   pcl::PointXYZ p1, p2;
   float factor = 800.0f;
 
-  for(size_t i=0; i < lastMatchCount; i++)
+  if (!paused)
   {
-    ss << "MatchLine" << i;
-    visu.removeShape(ss.str());   
-    ss.str (""); 
+    for(size_t i=0; i < lastMatchCount; i++)
+    {
+      ss << "MatchLine" << i;
+      visu.removeShape(ss.str());   
+      ss.str (""); 
+    }
+
+
+    for(size_t i=0; i < msg.matches.size(); i++)
+    {
+      p1.x = -msg.matches[i].u/factor +0.1f;
+      p1.y = -msg.matches[i].v/factor +0.1f;
+      p1.z = 2.48f;
+
+      p2.x = msg.matches[i].x;
+      p2.y = msg.matches[i].y;
+      p2.z = msg.matches[i].z;
+
+      ss << "MatchLine" << i;
+      visu.addLine (pcl::transformPoint (p1, lastPose), p2,ss.str ());
+      visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 1.0, ss.str());
+      ss.str ("");
+    }
+
+    lastMatchCount = msg.matches.size();
   }
-
-
-  for(size_t i=0; i < msg.matches.size(); i++)
-  {
-    p1.x = -msg.matches[i].u/factor +0.1f;
-    p1.y = -msg.matches[i].v/factor +0.1f;
-    p1.z = 2.48f;
-
-    p2.x = msg.matches[i].x;
-    p2.y = msg.matches[i].y;
-    p2.z = msg.matches[i].z;
-
-    ss << "MatchLine" << i;
-    visu.addLine (pcl::transformPoint (p1, lastPose), p2,ss.str ());
-    visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 1.0, ss.str());
-    ss.str ("");
-  }
-
-  lastMatchCount = msg.matches.size();
 }
 
 /**
@@ -401,8 +410,6 @@ void loadInterestMap(char* mapFilename)
     
   }
 
-
-
   // Add the map point cloud with a random color
   int red = rand() % 255, green=rand() % 255, blue=rand() % 255;
   pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler2 (mapCloud,red, green, blue);
@@ -440,12 +447,22 @@ void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
                         void* viewer_void)
 {
   boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *> (viewer_void);
-  if (event.getKeySym () == "p" && event.keyDown ())
+  if (event.getKeySym () == "l" && event.keyDown ())
   {
-    std::cout << "p pressed, stopping tracking" << std::endl;
+    std::cout << "KEY EVENT: l pressed, Toggling picture lock." << std::endl;
 
     cameraTrack = !cameraTrack;
   }
+  else if (event.getKeySym() == "Escape" && event.keyDown())
+  {
+    std::cout << "KEY EVENT: ESC pressed, closing." << std::endl;
+    escTriggered = true;
+  }
+  else if (event.getKeySym() == "space" && event.keyDown())
+  {
+    std::cout << "KEY EVENT: Space pressed, pausing visualization" << std::endl;
+    paused = !paused;
+  } 
 }
 
 int main (int argc, char** argv)
@@ -458,6 +475,11 @@ int main (int argc, char** argv)
               << "./application mapPointCloud interestPointFile cameraRosTopic" << std::endl;
     return -1;
   }
+
+  // Print the information text
+  visu.addText("Spacebar: Pause Visualization", 10, 80, "v1 text");
+  visu.addText("L: Lock the 2d image in place", 10, 60, "v2 text");
+  visu.addText("Esc: Close the Visualizer", 10, 40, "v3 text");
 
   // Prepare ros for listening to the data stream
   ros::init(argc, argv, "listener");
@@ -506,6 +528,10 @@ int main (int argc, char** argv)
     ros::spinOnce();
 
     // Redraw the image and the point correspondences
+    if(escTriggered)
+    {
+      ros::shutdown();
+    }
 
   }
 
