@@ -299,16 +299,15 @@ void imageHandleCallback(const sensor_msgs::ImageConstPtr& msg)
  **/
 void correspondenceCallback(const spheres_localization::point_match_array& msg)
 {
-  //ROS_INFO("I heard: [%s]", msg->data.c_str());
-  // Store the correspondences locally
-  // float factor = 800.0f;
-  // Camera offset: (0.1f,0.1f,2.5f)
+  // Function variables
   std::stringstream ss;
   pcl::PointXYZ p1, p2;
-  float factor = 800.0f;
+  float imageScaleFactor = 800.0f;
 
+  // When not paused, update the pose estimation
   if (!paused)
   {
+    // Remove old match lines
     for(size_t i=0; i < lastMatchCount; i++)
     {
       ss << "MatchLine" << i;
@@ -316,11 +315,12 @@ void correspondenceCallback(const spheres_localization::point_match_array& msg)
       ss.str (""); 
     }
 
-
+    // Draw the match lines from the pose estimator
     for(size_t i=0; i < msg.matches.size(); i++)
     {
-      p1.x = -msg.matches[i].u/factor +0.1f;
-      p1.y = -msg.matches[i].v/factor +0.1f;
+      // NOTE: Z is calibrated to a distance from the screen (backward)
+      p1.x = -msg.matches[i].u/imageScaleFactor +0.1f;
+      p1.y = -msg.matches[i].v/imageScaleFactor +0.1f;
       p1.z = 2.48f;
 
       p2.x = msg.matches[i].x;
@@ -333,6 +333,7 @@ void correspondenceCallback(const spheres_localization::point_match_array& msg)
       ss.str ("");
     }
 
+    // Store match count for removal next frame
     lastMatchCount = msg.matches.size();
   }
 }
@@ -361,6 +362,9 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
   // If we did not get RGB values, go ahead and try to determine them from the images
   if (cloud->points[0].r == 0 & cloud->points[0].g == 0 & cloud->points[0].b == 0)
   {
+    // Notify the user
+    std::cout << "INFO: Shrinking and thinning uncolored pointcloud" << std::endl;
+
     // Shrink the pointcloud to the same scale as the camera data (smaller distance between points)
     for(size_t i =0; i < cloud->size (); ++i)
     {
@@ -376,7 +380,7 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
     sor.filter(*cloudFiltered);
 
     // Notify the user
-    std::cout << "INFO: Coloring point cloud using the provided images." << std::endl;
+    std::cout << "INFO: Attempting to color the pointcloud using a provided directory." << std::endl;
     if(imageDirectory == 0)
     {
       std:cout << "WARN: No image directory provided!" << std::endl;
@@ -391,11 +395,12 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
     poseSS << imageDirectory << "/0.txt";
     int counter = 0;
 
-    // Prepare distance array (for selecting image points to color with)
+    // Prepare distance array (for selecting nearest image points to color with)
     float *shortestCamDist = new float [cloudFiltered->size()];
 
-    // Prime the loop (open first two file)
+    // Prime the loop (open first pose file)
     ifstream poseFin(poseSS.str().c_str());
+    std::cout << "INFO: Loading images [1...n].png and pose [1...n].txt..." << std::endl; 
 
     // For each image
     while(poseFin.good())
@@ -405,44 +410,45 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
 
       if(! frame.img.data )
       {
-        std::cout <<  "ERROR: Could not open or find the image" << std::endl ;
+        std::cout <<  "ERROR: Could not open or find image " << counter << ".png" << std::endl ;
+      }
+      else
+      {
+        std::cout << "\tFound and loaded " << counter << ".png" << std::endl;
+        // Initialize the pose
+        frame.pose.setIdentity();
+
+        // File processing variables
+        Eigen::Matrix3f rotation;
+        Eigen::Vector3f translation;
+        std::string temp;
+
+        // Load the pose information from the text file
+        poseFin >> temp;
+        poseFin >> translation.x()
+            >> translation.y()
+            >> translation.z();
+        poseFin >> temp;
+        poseFin >> rotation.coeffRef(0, 0)
+            >> rotation.coeffRef(0, 1)
+            >> rotation.coeffRef(0, 2)
+            >> rotation.coeffRef(1, 0)
+            >> rotation.coeffRef(1, 1)
+            >> rotation.coeffRef(1, 2)
+            >> rotation.coeffRef(2, 0)
+            >> rotation.coeffRef(2, 1)
+            >> rotation.coeffRef(2, 2);
+
+        // Combine translation and rotation, and get inverse (for ease of computation)
+        frame.pose.translation() = translation;
+        frame.pose.rotate(rotation);
+        frame.pose = frame.pose.inverse();
+
+        // Save the image in the vector
+        imageSet.push_back(frame);
       }
 
-      // Initialize the pose
-      frame.pose.setIdentity();
-
-      // Get the transformation from the pose file 
-      Eigen::Matrix3f rotation;
-      Eigen::Vector3f translation;
-
-      std::string temp;
-
-      poseFin >> temp;
-
-      poseFin >> translation.x()
-          >> translation.y()
-          >> translation.z();
-
-      poseFin >> temp;
-
-      poseFin >> rotation.coeffRef(0, 0)
-          >> rotation.coeffRef(0, 1)
-          >> rotation.coeffRef(0, 2)
-          >> rotation.coeffRef(1, 0)
-          >> rotation.coeffRef(1, 1)
-          >> rotation.coeffRef(1, 2)
-          >> rotation.coeffRef(2, 0)
-          >> rotation.coeffRef(2, 1)
-          >> rotation.coeffRef(2, 2);
-
-      // Assign the values to the pose
-      // Look here if there are problems with the rotation
-      frame.pose.translation() = translation;
-      frame.pose.rotate(rotation);
-      frame.pose = frame.pose.inverse();
-
-
-      imageSet.push_back(frame);
+      // Clean and prep for the next
       poseSS.str("");
       imageSS.str("");
       counter++;
@@ -452,9 +458,12 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
       poseFin.open(poseSS.str().c_str());
     }
 
-    float focal_length = 575.816f;
-    float cx = 319.5;
-    float cy = 239.5;
+    // Image constants
+    const float focal_length = 575.816f,
+                cx = 319.5,
+                cy = 239.5;
+
+    std::cout << "INFO: Coloring using loaded images." << std::endl;
 
     // Color all of the points
     for(size_t i =0; i < cloudFiltered->size(); ++i)
@@ -515,9 +524,9 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
     oldFilename = oldFilename.substr(0,oldFilename.length() - 4);
     std::stringstream ss;
     ss << oldFilename << "_color.pcd";
-    pcl::io::savePCDFileASCII (ss.str(), *cloudFiltered);
+    std::cout << "\nINFO: Saving colored pointcloud to " << ss.str() << "." << std::endl;
+    pcl::io::savePCDFile(ss.str(), *cloudFiltered, true);
     visu.addPointCloud(cloudFiltered, "cloud");
-    std::cout << std::endl;
 
     // Dealloc the distance array
     delete [] shortestCamDist;
@@ -525,9 +534,12 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
   else
   {
     // No filtering, just load the pre-colored cloud
-    std::cout << "INFO: Found colored point cloud." << std::endl;
+    std::cout << "INFO: Found colored point cloud, drawing directly." << std::endl;
     visu.addPointCloud(cloud, "cloud");
   }
+
+  // Notify completion
+  std::cout << "INFO: Done processing scene pointcloud." << std::endl;
 }
 
 /**
@@ -538,9 +550,6 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
  **/
 void loadInterestMap(char* mapFilename)
 {
-  // Initialize the pseudorandom number generator
-  srand (time(NULL));
-
   // Prepare to read the map file
   std::ifstream fin(mapFilename);
   float valCatcher;
@@ -574,9 +583,8 @@ void loadInterestMap(char* mapFilename)
     
   }
 
-  // Add the map point cloud with a random color
-  int red = rand() % 255, green=rand() % 255, blue=rand() % 255;
-  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> color_handler2 (mapCloud,red, green, blue);
+  // Add the map point cloud with a random colors
+  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> color_handler2 (mapCloud,255, 0, 0);
   std::stringstream cloudName;
   cloudName << "mapCloud";
   visu.addPointCloud(mapCloud, color_handler2, cloudName.str() );
