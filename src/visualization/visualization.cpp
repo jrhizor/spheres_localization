@@ -13,6 +13,14 @@
 #include <pcl/surface/texture_mapping.h>
 #include <pcl/io/vtk_lib_io.h>
 
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/features2d/features2d.hpp>
+#include <opencv2/nonfree/features2d.hpp>
+#include <opencv2/legacy/legacy.hpp>
+
 #include "ros/ros.h"
 #include  <signal.h>
 
@@ -32,7 +40,7 @@
 namespace enc = sensor_msgs::image_encodings;
 
 // TODO: Fix global badness, maybe a singleton
-pcl::visualization::PCLVisualizer visu ("cameras");
+pcl::visualization::PCLVisualizer visu ("Pose Estimation Visualizer");
 cv_bridge::CvImagePtr rgb;
 cv_bridge::CvImage rgbI;
 
@@ -45,6 +53,13 @@ bool escTriggered = false;
 bool paused = false;
 
 Eigen::Affine3f lastPose;
+
+struct ImageWithPose
+{
+  cv::Mat img;
+  Eigen::Affine3f pose;
+
+};
 
 class InvalidFileException : public std::exception
 {
@@ -244,10 +259,7 @@ void imageHandleCallback(const sensor_msgs::ImageConstPtr& msg)
     //float factor = 800.0f;
     // Camera offset: (0.1f,0.1f,2.5f)
 
-    // TODO: Allow the image to be posted stationary
-    // TODO: Make the image get bigger when you make it stationary
-    // TODO: Post the controls on the screen, as well as enable an escape button
-
+    // Convert the image into a flat pointcloud
     for(size_t i = 0; i < img.size().height; i++)
     { 
       for(size_t j = 0; j < img.size().width; j++)
@@ -331,39 +343,176 @@ void correspondenceCallback(const spheres_localization::point_match_array& msg)
  * Output: The scene is loaded into the visualizer
  * Throws: InvalidFileException
  **/
-void loadSceneCloud(char* sceneFilename) 
+void loadSceneCloud(char* sceneFilename, char* imageDirectory) 
 {
   // Prepare point cloud data structure
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloudFiltered (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudFiltered (new pcl::PointCloud<pcl::PointXYZRGB>);
 
   // Load up the map pointcloud
-  PCL_INFO ("\nLoading Map Point Cloud %s...\n", sceneFilename);
-  if(pcl::io::loadPCDFile<pcl::PointXYZ> (sceneFilename, *cloud) == -1)
+  PCL_INFO ("\nINFO: Loading Map Point Cloud %s...\n", sceneFilename);
+  if(pcl::io::loadPCDFile<pcl::PointXYZRGB> (sceneFilename, *cloud) == -1)
   {
     // Return failure to load
     PCL_ERROR("Could not load point cloud %s \n", sceneFilename);
     throw InvalidFileException(sceneFilename);
   }
-  
-  // Shrink the pointcloud to the same scale as the camera data (smaller distance between points)
-  for(size_t i =0; i < cloud->size (); ++i)
+
+  // If we did not get RGB values, go ahead and try to determine them from the images
+  if (cloud->points[0].r == 0 & cloud->points[0].g == 0 & cloud->points[0].b == 0)
   {
-    cloud->points[i].x*=0.006;
-    cloud->points[i].y*=0.006;
-    cloud->points[i].z*=0.006;
+    // Shrink the pointcloud to the same scale as the camera data (smaller distance between points)
+    for(size_t i =0; i < cloud->size (); ++i)
+    {
+      cloud->points[i].x*=0.006;
+      cloud->points[i].y*=0.006;
+      cloud->points[i].z*=0.006;
+    }
 
+    // Downsample the pointcloud (less points in the cloud)
+    pcl::VoxelGrid<pcl::PointXYZRGB> sor;
+    sor.setInputCloud(cloud);
+    sor.setLeafSize(0.01f,0.01f,0.01f);
+    sor.filter(*cloudFiltered);
+
+    // Notify the user
+    std::cout << "INFO: Coloring point cloud using the provided images." << std::endl;
+
+    // Prepare imagewithpose vector
+    std::vector<ImageWithPose> imageSet;
+
+    // Prepare string stream
+    std::stringstream imageSS, poseSS;
+    imageSS << imageDirectory << "/0.png";
+    poseSS << imageDirectory << "/0.txt";
+    int counter = 0;
+
+
+    // Prime the loop (open first two file)
+    ifstream poseFin(poseSS.str().c_str());
+
+    // For each image
+    while(poseFin.good())
+    {
+      ImageWithPose frame;
+      frame.img = cv::imread(imageSS.str().c_str(), CV_LOAD_IMAGE_COLOR);
+
+      if(! frame.img.data )
+      {
+        std::cout <<  "ERROR: Could not open or find the image" << std::endl ;
+      }
+
+      // Initialize the pose
+      frame.pose.setIdentity();
+
+      // Get the transformation from the pose file 
+      Eigen::Matrix3f rotation;
+      Eigen::Vector3f translation;
+
+      std::string temp;
+
+      poseFin >> temp;
+
+      poseFin >> translation.x()
+          >> translation.y()
+          >> translation.z();
+
+      poseFin >> temp;
+
+      poseFin >> rotation.coeffRef(0, 0)
+          >> rotation.coeffRef(0, 1)
+          >> rotation.coeffRef(0, 2)
+          >> rotation.coeffRef(1, 0)
+          >> rotation.coeffRef(1, 1)
+          >> rotation.coeffRef(1, 2)
+          >> rotation.coeffRef(2, 0)
+          >> rotation.coeffRef(2, 1)
+          >> rotation.coeffRef(2, 2);
+
+      // Assign the values to the pose
+      // Look here if there are problems with the rotation
+      frame.pose.translation() = translation;
+      frame.pose.rotate(rotation);
+      frame.pose = frame.pose.inverse();
+
+
+      imageSet.push_back(frame);
+      poseSS.str("");
+      imageSS.str("");
+      counter++;
+      poseSS << imageDirectory << "/" << counter << ".txt";
+      imageSS << imageDirectory << "/" << counter << ".png";
+      poseFin.close();
+      poseFin.open(poseSS.str().c_str());
+    }
+
+    float focal_length = 575.816f;
+    float cx = 319.5;
+    float cy = 239.5;
+
+    // Color all of the points
+    for(size_t i =0; i < cloudFiltered->size(); ++i)
+    {
+      cloudFiltered->points[i].r = 0;
+      cloudFiltered->points[i].g = 255;
+      cloudFiltered->points[i].b = 0;
+
+      // Update the progress bar
+      if(i%1000 == 0)
+      {
+        int completion = (((float)i)/cloudFiltered->size())*100.0f;
+        int numBars = 1 + (completion/5);
+        std::cout << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+                  << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
+        std::cout << "Coloring: [";
+
+        for(size_t j = 0; j < numBars; j++) std::cout << "=";
+        for(size_t j = 0; j < 20-numBars; j++) std::cout << "-";
+        std::cout << "] [" << completion+1 << "\%]";
+
+      }     
+
+      // Iterate over the images (until we find one that has this point)
+      for(std::vector<ImageWithPose>::iterator it = imageSet.begin(); it != imageSet.end(); ++it)
+      {
+        // Transform the point-cloud point by the camera transformation
+        pcl::PointXYZRGB transformedPoint = transformPoint(cloudFiltered->points[i], it->pose);
+
+        // Transform this point into screen coordinates
+        int u,v;
+        u = ((transformedPoint.x * focal_length) / transformedPoint.z) + cx;
+        v = ((transformedPoint.y * focal_length) / transformedPoint.z) + cy;
+
+        // Color the point if on camera and not already colored
+        if(cloudFiltered->points[i].r == 0 &&
+          cloudFiltered->points[i].g == 255 &&
+          cloudFiltered->points[i].b == 0)
+        {
+          if(u >= 0 && u < 640 && v >= 0 && v < 480)
+          {
+            cloudFiltered->points[i].r = it->img.at<cv::Vec3b>( v, u )[2];
+            cloudFiltered->points[i].g = it->img.at<cv::Vec3b>( v, u )[1];
+            cloudFiltered->points[i].b = it->img.at<cv::Vec3b>( v, u )[0];
+          }
+        }
+      }
+    }    
+    // Save the colored point cloud for the future
+    // Here i assume the file has .pcd extension (and remove it temporarily)
+    std::string oldFilename(sceneFilename);
+    oldFilename = oldFilename.substr(0,oldFilename.length() - 4);
+    std::stringstream ss;
+    ss << oldFilename << "_color.pcd";
+    pcl::io::savePCDFileASCII (ss.str(), *cloudFiltered);
+    visu.addPointCloud(cloudFiltered, "cloud");
+    std::cout << std::endl;
   }
-
-  // Downsample the pointcloud (less points in the cloud)
-  pcl::VoxelGrid<pcl::PointXYZ> sor;
-  sor.setInputCloud(cloud);
-  sor.setLeafSize(0.01f,0.01f,0.01f);
-  sor.filter(*cloudFiltered);
-
-  // Add the mesh's cloud (colored on X axis)
-  pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloudFiltered, "z");
-  visu.addPointCloud (cloudFiltered, color_handler, "cloud");
+  else
+  {
+    // No filtering, just load the pre-colored cloud
+    std::cout << "INFO: Found colored point cloud." << std::endl;
+    visu.addPointCloud(cloud, "cloud");
+  }
 }
 
 /**
@@ -389,7 +538,7 @@ void loadInterestMap(char* mapFilename)
   fin >> valCatcher >> valCatcher;
 
   // Get all of those points from the map, skip the SIFT features
-  pcl::PointCloud<pcl::PointXYZ>::Ptr mapCloud(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr mapCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
   
   while(fin.good())
   {
@@ -406,13 +555,13 @@ void loadInterestMap(char* mapFilename)
     }
 
     // Plot point
-    mapCloud->push_back(pcl::PointXYZ(x,y,z));
+    mapCloud->push_back(pcl::PointXYZRGB(x,y,z));
     
   }
 
   // Add the map point cloud with a random color
   int red = rand() % 255, green=rand() % 255, blue=rand() % 255;
-  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler2 (mapCloud,red, green, blue);
+  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> color_handler2 (mapCloud,red, green, blue);
   std::stringstream cloudName;
   cloudName << "mapCloud";
   visu.addPointCloud(mapCloud, color_handler2, cloudName.str() );
@@ -469,17 +618,17 @@ int main (int argc, char** argv)
 {
 
   // Fail and die if incorrect number of arguments was given
-  if( argc != 4 )
+  if( argc != 4 && argc != 5 )
   {
     std::cout << "ERROR: Incorrect number of arguments given" << std::endl
-              << "./application mapPointCloud interestPointFile cameraRosTopic" << std::endl;
+              << "./application mapPointCloud interestPointFile cameraRosTopic imageDirectory" << std::endl;
     return -1;
   }
 
   // Print the information text
-  visu.addText("Spacebar: Pause Visualization", 10, 80, "v1 text");
-  visu.addText("L: Lock the 2d image in place", 10, 60, "v2 text");
-  visu.addText("Esc: Close the Visualizer", 10, 40, "v3 text");
+  visu.addText("Spacebar: Pause Visualization", 15, 80, "v1 text");
+  visu.addText("L: Lock the 2d image in place", 15, 60, "v2 text");
+  visu.addText("Esc: Close the Visualizer", 15, 40, "v3 text");
 
   // Prepare ros for listening to the data stream
   ros::init(argc, argv, "listener");
@@ -504,7 +653,7 @@ int main (int argc, char** argv)
   try
   {
     // Load the scene cloud
-    loadSceneCloud(argv[1]);
+    loadSceneCloud(argv[1], argv[4]);
 
     // Load the interest points
     loadInterestMap(argv[2]);
@@ -527,7 +676,7 @@ int main (int argc, char** argv)
     visu.spinOnce();
     ros::spinOnce();
 
-    // Redraw the image and the point correspondences
+    // Close the program (if triggered)
     if(escTriggered)
     {
       ros::shutdown();

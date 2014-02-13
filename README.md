@@ -8,7 +8,9 @@ Spheres Localization
 	rosrun spheres_localization pose_estimation map_file descriptor_type camera_stream
 
 ## Visualization
-	rosrun spheres_localization visualization world_point_cloud map_file camera_stream
+	rosrun spheres_localization visualization world_point_cloud map_file camera_stream image_directory
+
+	NOTE: Last parameter of visualization may be omitted for a precolored pointcloud
 
 To use a bag file for visualization:
 
@@ -27,4 +29,5 @@ To use a bag file for visualization:
 
 	rosrun spheres_localization pose_estimation /home/jared/garage_dataset/KinFuSnapshots/map.txt SIFT /camera/rgb/image_color
 
-	rosrun spheres_localization visualization /home/jared/garage_dataset/world.pcd /home/jared/garage_dataset/KinFuSnapshots/map.txt /camera/rgb/image_color
+	rosrun spheres_localization visualization /home/jared/garage_dataset/world.pcd /home/jared/garage_dataset/KinFuSnapshots/map.txt /camera/rgb/image_color ../KinFuSnapshots
+
