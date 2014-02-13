@@ -377,6 +377,10 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
 
     // Notify the user
     std::cout << "INFO: Coloring point cloud using the provided images." << std::endl;
+    if(imageDirectory == 0)
+    {
+      std:cout << "WARN: No image directory provided!" << std::endl;
+    }
 
     // Prepare imagewithpose vector
     std::vector<ImageWithPose> imageSet;
@@ -387,6 +391,8 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
     poseSS << imageDirectory << "/0.txt";
     int counter = 0;
 
+    // Prepare distance array (for selecting image points to color with)
+    float *shortestCamDist = new float [cloudFiltered->size()];
 
     // Prime the loop (open first two file)
     ifstream poseFin(poseSS.str().c_str());
@@ -453,9 +459,11 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
     // Color all of the points
     for(size_t i =0; i < cloudFiltered->size(); ++i)
     {
+      // Initialize the color, and set the camera distance to really far
       cloudFiltered->points[i].r = 0;
       cloudFiltered->points[i].g = 255;
       cloudFiltered->points[i].b = 0;
+      shortestCamDist[i] = 100000.0f;
 
       // Update the progress bar
       if(i%1000 == 0)
@@ -483,17 +491,21 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
         u = ((transformedPoint.x * focal_length) / transformedPoint.z) + cx;
         v = ((transformedPoint.y * focal_length) / transformedPoint.z) + cy;
 
-        // Color the point if on camera and not already colored
-        if(cloudFiltered->points[i].r == 0 &&
-          cloudFiltered->points[i].g == 255 &&
-          cloudFiltered->points[i].b == 0)
+        // Find the distance to the camera
+        float camDistanceToPoint = sqrt(
+          transformedPoint.x*transformedPoint.x +
+          transformedPoint.y*transformedPoint.y +
+          transformedPoint.z*transformedPoint.z);
+
+
+        // Color the point if on camera and closer to camera than before
+        if(u >= 0 && u < 640 && v >= 0 && v < 480 &&
+          camDistanceToPoint < shortestCamDist[i])
         {
-          if(u >= 0 && u < 640 && v >= 0 && v < 480)
-          {
             cloudFiltered->points[i].r = it->img.at<cv::Vec3b>( v, u )[2];
             cloudFiltered->points[i].g = it->img.at<cv::Vec3b>( v, u )[1];
             cloudFiltered->points[i].b = it->img.at<cv::Vec3b>( v, u )[0];
-          }
+            shortestCamDist[i] = camDistanceToPoint;
         }
       }
     }    
@@ -506,6 +518,9 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
     pcl::io::savePCDFileASCII (ss.str(), *cloudFiltered);
     visu.addPointCloud(cloudFiltered, "cloud");
     std::cout << std::endl;
+
+    // Dealloc the distance array
+    delete [] shortestCamDist;
   }
   else
   {
