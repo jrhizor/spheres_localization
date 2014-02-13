@@ -287,8 +287,8 @@ void imageHandleCallback(const sensor_msgs::ImageConstPtr& msg)
       pcl::transformPointCloud (*imageCloud, *imageCloud2, lastPose);        
     }
     
-    visu.removePointCloud("imageCloud");
-    visu.addPointCloud(imageCloud2,"imageCloud");
+    //visu.removePointCloud("imageCloud");
+    visu.updatePointCloud(imageCloud2,"imageCloud");
   }
 }
 
@@ -511,10 +511,10 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
         if(u >= 0 && u < 640 && v >= 0 && v < 480 &&
           camDistanceToPoint < shortestCamDist[i])
         {
-            cloudFiltered->points[i].r = it->img.at<cv::Vec3b>( v, u )[2];
-            cloudFiltered->points[i].g = it->img.at<cv::Vec3b>( v, u )[1];
-            cloudFiltered->points[i].b = it->img.at<cv::Vec3b>( v, u )[0];
-            shortestCamDist[i] = camDistanceToPoint;
+          cloudFiltered->points[i].r = it->img.at<cv::Vec3b>( v, u )[2];
+          cloudFiltered->points[i].g = it->img.at<cv::Vec3b>( v, u )[1];
+          cloudFiltered->points[i].b = it->img.at<cv::Vec3b>( v, u )[0];
+          shortestCamDist[i] = camDistanceToPoint;
         }
       }
     }    
@@ -639,6 +639,9 @@ void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
 
 int main (int argc, char** argv)
 {
+  // Prime the image pointcloud, for performance (use updatePointCloud instead of remove & add)
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+  visu.addPointCloud(cloud, "imageCloud");
 
   // Fail and die if incorrect number of arguments was given
   if( argc != 4 && argc != 5 )
@@ -691,10 +694,8 @@ int main (int argc, char** argv)
   visu.addCoordinateSystem (1.0);
   visu.resetCamera ();
   
-
   // TEMP: Initialize camera to a good position for Jared
-    visu.setCameraPosition(-0.763717, 1.30741, -4.50887, 0, -1,-1);
-
+  visu.setCameraPosition(-0.763717, 1.30741, -4.50887, 0, -1,-1);
 
   // Spin through ros callbacks and pcl window monitoring
   while(ros::ok())
