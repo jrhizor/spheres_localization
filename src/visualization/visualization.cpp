@@ -692,6 +692,10 @@ int main (int argc, char** argv)
   visu.resetCamera ();
   
 
+  // TEMP: Initialize camera to a good position for Jared
+    visu.setCameraPosition(-0.763717, 1.30741, -4.50887, 0, -1,-1);
+
+
   // Spin through ros callbacks and pcl window monitoring
   while(ros::ok())
   {
