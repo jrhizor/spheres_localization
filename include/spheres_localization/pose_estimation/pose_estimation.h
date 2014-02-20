@@ -277,10 +277,6 @@ std::cout << good_matches.size() << std::endl;
   cv::Matx33f cameraMatrix(525.0, 0.0, 319.5, 0.0, 525.0, 239.5, 0.0, 0.0, 1.0);
 
   std::vector<float> distortions;
-  distortions.push_back(0.18126525); 
-  distortions.push_back(-0.39866885);
-  distortions.push_back(0);
-  distortions.push_back(0);
   
   std::vector<int> inliers;
 
