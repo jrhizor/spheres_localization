@@ -281,22 +281,25 @@ std::cout << good_matches.size() << std::endl;
 
   //solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
   
-  int initMinInliers = 200;
+
+
+  int initMinInliers = 300; // as this goes up to 400 it becomes VERY STABLE, but it reaches fail states more often
   int count = 0;
 
-  while(inliers.size()==0 && count < 20)
+  while(inliers.size()==0)
   {
     inliers.clear();
     solvePnPRansac(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, 
-          2000, //iterations 
-          10, // reproj error 
+          5000, //iterations 
+          30, // reproj error 
           initMinInliers, // min inliers 
           inliers, CV_EPNP);
  
     if(first) first = false;
 
-    if(initMinInliers<imagePoints.size()*.75) initMinInliers++;
     count++;
+
+    std::cout << "ransac attempts: " << count << std::endl;
   }
   
 
