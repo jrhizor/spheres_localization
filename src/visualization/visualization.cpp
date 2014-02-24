@@ -37,23 +37,10 @@
 #include <spheres_localization/point_match.h>
 #include <spheres_localization/point_match_array.h>
 
-namespace enc = sensor_msgs::image_encodings;
+#include <spheres_localization/visualization/PoseVisualizer.h>
+#include <spheres_localization/visualization/MessageHandler.h>
 
-// TODO: Fix global badness, maybe a singleton
-pcl::visualization::PCLVisualizer visu ("Pose Estimation Visualizer");
-cv_bridge::CvImagePtr rgb;
-cv_bridge::CvImage rgbI;
-
-int lastMatchCount = 0;
-
-bool new_image;
-bool cameraTrack = true;
-
-bool escTriggered = false;
-bool paused = false;
-
-Eigen::Affine3f lastPose;
-
+// Struct: Used for matching poses with images for coloring the point cloud
 struct ImageWithPose
 {
   cv::Mat img;
@@ -61,6 +48,7 @@ struct ImageWithPose
 
 };
 
+// Exception: Thrown by file loading functions (for catching in main)
 class InvalidFileException : public std::exception
 {
 public:
@@ -70,281 +58,12 @@ public:
 };
 
 /**
- * Function: redrawCameras
- * Input: PCL file containing camera position data (refer to PCL documentation)
- * Output: Redraws the camera frustrum in the visualizer window
- **/
-void redrawCameras (pcl::TextureMapping<pcl::PointXYZ>::Camera cam)
-{
-  // read current camera
-  double focal = cam.focal_length;
-  double height = cam.height;
-  double width = cam.width;
-  
-  // create a 5-point visual for each camera
-  pcl::PointXYZ p1, p2, p3, p4, p5;
-  p1.x=0; p1.y=0; p1.z=0;
-  double angleX = RAD2DEG (2.0 * atan (width / (2.0*focal)));
-  double angleY = RAD2DEG (2.0 * atan (height / (2.0*focal)));
-  double dist = 0.75;
-  double minX, minY, maxX, maxY;
-  maxX = dist*tan (atan (width / (2.0*focal)));
-  minX = -maxX;
-  maxY = dist*tan (atan (height / (2.0*focal)));
-  minY = -maxY;
-  p2.x=minX; p2.y=minY; p2.z=dist;
-  p3.x=maxX; p3.y=minY; p3.z=dist;
-  p4.x=maxX; p4.y=maxY; p4.z=dist;
-  p5.x=minX; p5.y=maxY; p5.z=dist;
-  p1=pcl::transformPoint (p1, cam.pose);
-  p2=pcl::transformPoint (p2, cam.pose);
-  p3=pcl::transformPoint (p3, cam.pose);
-  p4=pcl::transformPoint (p4, cam.pose);
-  p5=pcl::transformPoint (p5, cam.pose);
-  std::stringstream ss;
-  ss << "Cam";
-  visu.removeShape(ss.str());
-  visu.addText3D(ss.str (), p1, 0.1, 1.0, 1.0, 1.0, ss.str ());
-  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
-
-  ss.str ("");
-  ss << "camera" << "line1";
-  visu.removeShape(ss.str());
-  visu.addLine (p1, p2,ss.str ());
-  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
-  
-  ss.str ("");
-  ss << "camera" << "line2";
-  visu.removeShape(ss.str());
-  visu.addLine (p1, p3,ss.str ());
-  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
-
-  ss.str ("");
-  ss << "camera" << "line3";
-  visu.removeShape(ss.str());
-  visu.addLine (p1, p4,ss.str ());
-  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
-
-  ss.str ("");
-  ss << "camera" << "line4";
-  visu.removeShape(ss.str());
-  visu.addLine (p1, p5,ss.str ());
-  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
-  
-  ss.str ("");
-  ss << "camera" << "line5";
-  visu.removeShape(ss.str());
-  visu.addLine (p2, p5,ss.str ());
-  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
-  
-  ss.str ("");
-  ss << "camera" << "line6";
-  visu.removeShape(ss.str());
-  visu.addLine (p5, p4,ss.str ());
-  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
-  
-  ss.str ("");
-  ss << "camera" << "line7";
-  visu.removeShape(ss.str());
-  visu.addLine (p4, p3,ss.str ());
-  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
-  
-  ss.str ("");
-  ss << "camera" << "line8";
-  visu.removeShape(ss.str());
-  visu.addLine (p3, p2,ss.str ());
-  visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, ss.str());
-
-}
-
-/**
- * Function: readCamPoseStreamMsg
- * Input: A String message from the ros data stream
- *        Camera position data (Refer to PCL documentation)
- * Output: Camera position data
- *         A boolean indicating if the data was valid
- **/
-// TODO: Rename this function to something more succinct 
-bool readCamPoseStreamMsg(const spheres_localization::pose& msg, pcl::TextureMapping<pcl::PointXYZ>::Camera &cam)
-{
-  // Translation Information
-  cam.pose (0,3)=msg.x; //TX
-  cam.pose (1,3)=msg.y; //TY
-  cam.pose (2,3)=msg.z; //TZ
-
-  // Rotation Matrix
-  cam.pose (0,0)=msg.rot_mat[0];
-  cam.pose (0,1)=msg.rot_mat[1];
-  cam.pose (0,2)=msg.rot_mat[2];
-
-  cam.pose (1,0)=msg.rot_mat[3];
-  cam.pose (1,1)=msg.rot_mat[4];
-  cam.pose (1,2)=msg.rot_mat[5];
-
-  cam.pose (2,0)=msg.rot_mat[6];
-  cam.pose (2,1)=msg.rot_mat[7];
-  cam.pose (2,2)=msg.rot_mat[8];
-
-  // Scale
-  cam.pose (3,0) = 0.0;
-  cam.pose (3,1) = 0.0;
-  cam.pose (3,2) = 0.0;
-  cam.pose (3,3) = 1.0; //Scale
-  
-  // Hard coded (to kinect values) since the phone will not have this information available
-  cam.focal_length = 575.816f;
-  cam.height = 480;
-  cam.width = 640;
-
-  // Check that the data is valid, return false if failed
-  if(cam.pose(0,3) == 0 && cam.pose(1,3) == 0 && cam.pose(2,3) == 0 )
-  {
-    return false;
-  }
-
-  return true;
-
-}
-
-/**
- * Function: poseEstimateCallback
- * Input: A special pose message from the ros data stream
- * Output: Processes the data from the ros stream and updates the visualization
- **/
-void poseEstimateCallback(const spheres_localization::pose& msg)
-{
-  //ROS_INFO("I heard: [%s]", msg->data.c_str());
-  pcl::TextureMapping<pcl::PointXYZ>::Camera cam;
-
-  if (readCamPoseStreamMsg(msg, cam) && !paused) 
-  {
-    redrawCameras(cam);
-  }
-
-}
-
-/**
- * Function: imageHandleCallback
- * Input: A special camera message from the ros data stream
- * Output: Processes the data from the ros stream and updates the visualization
- **/
-void imageHandleCallback(const sensor_msgs::ImageConstPtr& msg)
-{
-
-  if (!paused)
-  {
-    try
-    {
-      rgb = cv_bridge::toCvCopy(msg, enc::BGR8);
-    }
-    catch (cv_bridge::Exception& e)
-    {
-      ROS_ERROR("cv_bridge exception: %s", e.what());
-      return;
-    }
-
-    rgbI = *rgb;
-
-    new_image = true;
-
-    float factor = 800.0f;
-
-    // Prepare new image for rendering in the visualizer
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr imageCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-      pcl::PointCloud<pcl::PointXYZRGB>::Ptr imageCloud2 (new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    cv::Mat img = rgbI.image;
-
-
-    //float factor = 800.0f;
-    // Camera offset: (0.1f,0.1f,2.5f)
-
-    // Convert the image into a flat pointcloud
-    for(size_t i = 0; i < img.size().height; i++)
-    { 
-      for(size_t j = 0; j < img.size().width; j++)
-      {
-        pcl::PointXYZRGB tempPoint;
-        tempPoint.x = ((float)-j)/factor + 0.1f;
-        tempPoint.y = ((float)-i)/factor + 0.1f;
-        tempPoint.z = 2.5f;
-        tempPoint.r = img.at<cv::Vec3b>( i, j )[2];
-        tempPoint.g = img.at<cv::Vec3b>( i, j )[1];
-        tempPoint.b = img.at<cv::Vec3b>( i, j )[0];
-
-        imageCloud->push_back(tempPoint);
-      }
-    }
-
-    // Remove the old imagecloud from the visualizer and add the new one
-    if(cameraTrack)
-    {
-      pcl::transformPointCloud (*imageCloud, *imageCloud2 , visu.getViewerPose());
-      lastPose = visu.getViewerPose();
-    }
-    else
-    {
-      pcl::transformPointCloud (*imageCloud, *imageCloud2, lastPose);        
-    }
-    
-    //visu.removePointCloud("imageCloud");
-    visu.updatePointCloud(imageCloud2,"imageCloud");
-  }
-}
-
-/**
- * Function: correspondenceCallback
- * Input: A special point correspondence message from the ros data stream
- * Output: Processes the data from the ros stream and updates the visualization
- **/
-void correspondenceCallback(const spheres_localization::point_match_array& msg)
-{
-  // Function variables
-  std::stringstream ss;
-  pcl::PointXYZ p1, p2;
-  float imageScaleFactor = 800.0f;
-
-  // When not paused, update the pose estimation
-  if (!paused)
-  {
-    // Remove old match lines
-    for(size_t i=0; i < lastMatchCount; i++)
-    {
-      ss << "MatchLine" << i;
-      visu.removeShape(ss.str());   
-      ss.str (""); 
-    }
-
-    // Draw the match lines from the pose estimator
-    for(size_t i=0; i < msg.matches.size(); i++)
-    {
-      // NOTE: Z is calibrated to a distance from the screen (backward)
-      p1.x = -msg.matches[i].u/imageScaleFactor +0.1f;
-      p1.y = -msg.matches[i].v/imageScaleFactor +0.1f;
-      p1.z = 2.48f;
-
-      p2.x = msg.matches[i].x;
-      p2.y = msg.matches[i].y;
-      p2.z = msg.matches[i].z;
-
-      ss << "MatchLine" << i;
-      visu.addLine (pcl::transformPoint (p1, lastPose), p2,ss.str ());
-      visu.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 1.0, ss.str());
-      ss.str ("");
-    }
-
-    // Store match count for removal next frame
-    lastMatchCount = msg.matches.size();
-  }
-}
-
-/**
  * Function: loadSceneCloud
  * Input: A Filename for the scene's pointcloud
  * Output: The scene is loaded into the visualizer
  * Throws: InvalidFileException
  **/
-void loadSceneCloud(char* sceneFilename, char* imageDirectory) 
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr loadSceneCloud(char* sceneFilename, char* imageDirectory) 
 {
   // Prepare point cloud data structure
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -474,7 +193,7 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
       cloudFiltered->points[i].b = 0;
       shortestCamDist[i] = 100000.0f;
 
-      // Update the progress bar
+      // Update the progress bar (every 1000 iterations)
       if(i%1000 == 0)
       {
         int completion = (((float)i)/cloudFiltered->size())*100.0f;
@@ -489,7 +208,7 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
 
       }     
 
-      // Iterate over the images (until we find one that has this point)
+      // Look through all images for this point
       for(std::vector<ImageWithPose>::iterator it = imageSet.begin(); it != imageSet.end(); ++it)
       {
         // Transform the point-cloud point by the camera transformation
@@ -507,7 +226,7 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
           transformedPoint.z*transformedPoint.z);
 
 
-        // Color the point if on camera and closer to camera than before
+        // Color the point if on camera and closer to camera than previous best
         if(u >= 0 && u < 640 && v >= 0 && v < 480 &&
           camDistanceToPoint < shortestCamDist[i])
         {
@@ -520,26 +239,31 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
     }    
     // Save the colored point cloud for the future
     // Here i assume the file has .pcd extension (and remove it temporarily)
+    // TODO: parse the file forward to the period, no "guessing"
     std::string oldFilename(sceneFilename);
     oldFilename = oldFilename.substr(0,oldFilename.length() - 4);
     std::stringstream ss;
     ss << oldFilename << "_color.pcd";
     std::cout << "\nINFO: Saving colored pointcloud to " << ss.str() << "." << std::endl;
     pcl::io::savePCDFile(ss.str(), *cloudFiltered, true);
-    visu.addPointCloud(cloudFiltered, "cloud");
 
     // Dealloc the distance array
     delete [] shortestCamDist;
+
+    // Return the colored cloud
+    cloud = cloudFiltered;
   }
   else
   {
     // No filtering, just load the pre-colored cloud
     std::cout << "INFO: Found colored point cloud, drawing directly." << std::endl;
-    visu.addPointCloud(cloud, "cloud");
   }
 
   // Notify completion
   std::cout << "INFO: Done processing scene pointcloud." << std::endl;
+
+  // Return result of loading pointcloud
+  return cloud;
 }
 
 /**
@@ -548,7 +272,7 @@ void loadSceneCloud(char* sceneFilename, char* imageDirectory)
  * Output: The interest points are loaded into the visualizer
  * Throws: InvalidFileException
  **/
-void loadInterestMap(char* mapFilename)
+pcl::PointCloud<pcl::PointXYZ>::Ptr loadInterestMap(char* mapFilename)
 {
   // Prepare to read the map file
   std::ifstream fin(mapFilename);
@@ -562,7 +286,7 @@ void loadInterestMap(char* mapFilename)
   fin >> valCatcher >> valCatcher;
 
   // Get all of those points from the map, skip the SIFT features
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr mapCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr mapCloud(new pcl::PointCloud<pcl::PointXYZ>);
   
   while(fin.good())
   {
@@ -579,110 +303,43 @@ void loadInterestMap(char* mapFilename)
     }
 
     // Plot point
-    mapCloud->push_back(pcl::PointXYZRGB(x,y,z));
+    mapCloud->push_back(pcl::PointXYZ(x,y,z));
     
   }
 
-  // Add the map point cloud with a random colors
-  pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> color_handler2 (mapCloud,255, 0, 0);
-  std::stringstream cloudName;
-  cloudName << "mapCloud";
-  visu.addPointCloud(mapCloud, color_handler2, cloudName.str() );
-  visu.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, cloudName.str());  
+  // Return the interest point cloud
+  return mapCloud;
 }
 
-/**
- * Function: redrawImageOverlay
- * Input: The camera image and the list of correspondences
- * Output: The image is redrawn onto the visualizer along with the correspondences
- * Throws: InvalidFileException
- **/
-void redrawImageOverlay()
-{
-  // Define Function Variables
-
-  // Remove the old image pointcloud
-
-  // Remove the old correspondences
-
-  // Convert the image into a pointcloud
-
-  // Transform the image by the camera position and orientation
-
-  // Offset the image to a good position
-
-  // Draw the correspondences
-
-}
-
-void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
-                        void* viewer_void)
-{
-  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *> (viewer_void);
-  if (event.getKeySym () == "l" && event.keyDown ())
-  {
-    std::cout << "KEY EVENT: l pressed, Toggling picture lock." << std::endl;
-
-    cameraTrack = !cameraTrack;
-  }
-  else if (event.getKeySym() == "Escape" && event.keyDown())
-  {
-    std::cout << "KEY EVENT: ESC pressed, closing." << std::endl;
-    escTriggered = true;
-  }
-  else if (event.getKeySym() == "space" && event.keyDown())
-  {
-    std::cout << "KEY EVENT: Space pressed, pausing visualization" << std::endl;
-    paused = !paused;
-  } 
-}
 
 int main (int argc, char** argv)
 {
-  // Prime the image pointcloud, for performance (use updatePointCloud instead of remove & add)
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-  visu.addPointCloud(cloud, "imageCloud");
 
-  // Fail and die if incorrect number of arguments was given
+  // Define program variables
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr sceneCloud;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr interestCloud;
+  PoseVisualizer *visualizer;
+  MessageHandler *msgHandler;
+
+  // Prepare ROS?
+  ros::init(argc, argv, "listener");
+
+  // Validate the program arguments
   if( argc != 4 && argc != 5 )
   {
     std::cout << "ERROR: Incorrect number of arguments given" << std::endl
               << "./application mapPointCloud interestPointFile cameraRosTopic imageDirectory" << std::endl;
     return -1;
-  }
+  }  
 
-  // Print the information text
-  visu.addText("Spacebar: Pause Visualization", 15, 80, "v1 text");
-  visu.addText("L: Lock the 2d image in place", 15, 60, "v2 text");
-  visu.addText("Esc: Close the Visualizer", 15, 40, "v3 text");
-
-  // Prepare ros for listening to the data stream
-  ros::init(argc, argv, "listener");
-  ros::NodeHandle n;
-
-  // Pose Estimation handling
-  ros::Subscriber subPose = n.subscribe("pose_estimation", 1000, poseEstimateCallback);
-
-  // Image Handling
-  image_transport::ImageTransport it(n);
-  image_transport::Subscriber rgb_sub;
-  rgb_sub = it.subscribe(argv[3], 1, imageHandleCallback);
-
-  // Correspondence handling
-  ros::Subscriber subCorresp = n.subscribe("point_match_array", 1000, correspondenceCallback);
-
-  // Keyboard Listener
-  visu.registerKeyboardCallback (keyboardEventOccurred, (void*)&visu);
-
-
-  // Do all of the map loading
+  // Attempt to load the scene file and the interest point file
   try
   {
     // Load the scene cloud
-    loadSceneCloud(argv[1], argv[4]);
+    sceneCloud = loadSceneCloud(argv[1], argv[4]);
 
     // Load the interest points
-    loadInterestMap(argv[2]);
+    interestCloud = loadInterestMap(argv[2]);
   }
   catch(InvalidFileException e)
   {
@@ -690,27 +347,28 @@ int main (int argc, char** argv)
     return -1;
   }
 
-  // Finish initializing the visualizer
-  visu.addCoordinateSystem (1.0);
-  visu.resetCamera ();
-  
-  // TEMP: Initialize camera to a good position for Jared
-  visu.setCameraPosition(-0.763717, 1.30741, -4.50887, 0, -1,-1);
+  // Initialize the visualizer
+  visualizer = new PoseVisualizer(sceneCloud, interestCloud);
 
-  // Spin through ros callbacks and pcl window monitoring
-  while(ros::ok())
+  // Initialize the message handler
+  msgHandler = new MessageHandler(visualizer, argv[3]);
+
+  // Exec until Visualizer or MessageHandler die
+  while(visualizer->ok() && msgHandler->ok())
   {
     // Do the spinning
-    visu.spinOnce();
+    visualizer->spinOnce();
     ros::spinOnce();
-
-    // Close the program (if triggered)
-    if(escTriggered)
-    {
-      ros::shutdown();
-    }
 
   }
 
-  return (0);
+  // Clean up
+  ros::shutdown();
+
+  // Delete pointers
+  delete visualizer;
+  delete msgHandler;
+
+  // Return completion
+  return 0;
 }

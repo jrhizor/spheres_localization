@@ -89,6 +89,8 @@ include_directories(
 # add_library(spheres_localization
 #   src/${PROJECT_NAME}/spheres_localization.cpp
 # )
+add_library(MessageHandler src/visualization/MessageHandler.cpp)
+add_library(PoseVisualizer src/visualization/PoseVisualizer.cpp)
 
 ## Declare a cpp executable
 add_executable(pose_estimation src/pose_estimation/pose_estimation.cpp)
@@ -112,7 +114,7 @@ target_link_libraries(charting ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_
 target_link_libraries(pose_estimation ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES}
 ${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so)
 target_link_libraries(visualization ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} 
-${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so libvtkIO.so libvtkHybrid.so)
+${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so libvtkIO.so libvtkHybrid.so MessageHandler PoseVisualizer)
 
 
 target_link_libraries(temp_broadcaster ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} 
