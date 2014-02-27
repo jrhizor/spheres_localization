@@ -73,7 +73,7 @@ PoseVisualizer::PoseVisualizer(pcl::PointCloud<pcl::PointXYZRGB>::Ptr sceneCloud
 	visu->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "InterestCloud");
 
 	// Keyboard Listener
-	visu->registerKeyboardCallback (PoseVisualizer::keyboardEventOccurred, (void*)&visu);
+	visu->registerKeyboardCallback (&PoseVisualizer::keyboardEventOccurred, (void*)visu);
 
 	// Finish initializing the visualizer
 	visu->addCoordinateSystem (1.0);

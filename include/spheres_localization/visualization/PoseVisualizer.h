@@ -59,7 +59,7 @@ public:
 	bool ok(){return escPressed;}
 
 private:
-	pcl::visualization::PCLVisualizer::Ptr visu;
+	pcl::visualization::PCLVisualizer *visu;
 
 	bool escPressed,
 		paused,
