@@ -362,6 +362,8 @@ int main (int argc, char** argv)
 
   }
 
+  std::cout << "INFO: Closing program" << std::endl;
+
   // Clean up
   ros::shutdown();
 

@@ -49,8 +49,8 @@ PoseVisualizer::PoseVisualizer(pcl::PointCloud<pcl::PointXYZRGB>::Ptr sceneCloud
 	escPressed = false;
 	paused = false;
 	cameraTrack = true;
-	shouldDrawMatches = false;
-	shouldDrawCorresp = true;
+	displayMatches = false;
+	displayCorresp = true;
 	lastMatchCount = 0;
 	lastCorrespCount = 0;
 
@@ -62,9 +62,11 @@ PoseVisualizer::PoseVisualizer(pcl::PointCloud<pcl::PointXYZRGB>::Ptr sceneCloud
 	visu->addPointCloud(cloud, "ImageCloud");
 
 	// Print the information text
-	visu->addText("Spacebar: Pause Visualization", 15, 80, "v1 text");
-	visu->addText("L: Lock the 2d image in place", 15, 60, "v2 text");
-	visu->addText("Esc: Close the Visualizer", 15, 40, "v3 text");
+	visu->addText("Spacebar: Pause Visualization", 15, 100, "v1 text");
+	visu->addText("L: Lock the 2d image in place", 15, 80, "v2 text");
+	visu->addText("Esc: Close the Visualizer", 15, 60, "v3 text");
+	visu->addText("M: Toggle display of the matches", 15, 40, "v4 text");
+	visu->addText("C: Toggle display of the correspondences", 15, 20, "v5 text");
 
 	// Add the point clouds to the visualizer
 	visu->addPointCloud(sceneCloud, "SceneCloud");
@@ -73,7 +75,7 @@ PoseVisualizer::PoseVisualizer(pcl::PointCloud<pcl::PointXYZRGB>::Ptr sceneCloud
 	visu->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "InterestCloud");
 
 	// Keyboard Listener
-	visu->registerKeyboardCallback (&PoseVisualizer::keyboardEventOccurred, (void*)visu);
+	visu->registerKeyboardCallback (&PoseVisualizer::keyboardEventOccurred, *this, (void*)visu);
 
 	// Finish initializing the visualizer
 	visu->addCoordinateSystem (1.0);
@@ -148,29 +150,45 @@ void PoseVisualizer::keyboardEventOccurred (const pcl::visualization::KeyboardEv
   {
     std::cout << "KEY EVENT: Space pressed, pausing visualization" << std::endl;
     paused = !paused;
-  } 
+  }
+  else if (event.getKeySym() == "m" && event.keyDown())
+  {
+  	std::cout << "KEY EVENT: m pressed, Toggling matches" << std::endl;
+  	displayMatches = !displayMatches; 
+  }
+  else if (event.getKeySym() == "c" && event.keyDown())
+  {
+  	std::cout << "KEY EVENT: c pressed, Toggling correspondences" << std::endl;
+  	displayCorresp = !displayCorresp;
+  }
 }
 
 void PoseVisualizer::updateCorrespondences(const spheres_localization::point_match_array& correspondences)
 {
   // When not paused and we want, draw correspondences
-  if (!paused && shouldDrawCorresp)
+  if (!paused && displayCorresp)
   {
     // Remove old corresp lines
     clearLines("CorrespLine", lastCorrespCount);
 
     // Draw the corresp lines from the pose estimator
-   	drawLines(correspondences, "CorresLine", 1.0f, 1.0f, 0.0f);
+   	drawLines(correspondences, "CorrespLine", 1.0f, 1.0f, 0.0f);
 
     // Store corresp count for removal next frame
     lastCorrespCount = correspondences.matches.size();
+  }
+  else if (!paused && lastCorrespCount > 0)
+  {
+    // Remove old corresp lines
+    clearLines("CorrespLine", lastCorrespCount);
+    lastCorrespCount = 0;  	
   }
 }
 
 void PoseVisualizer::updateMatches(const spheres_localization::point_match_array& matches)
 {
   // When not paused and we want, draw matches
-  if (!paused && shouldDrawMatches)
+  if (!paused && displayMatches)
   {
     // Remove old match lines
     clearLines("MatchLine", lastMatchCount);
@@ -180,6 +198,12 @@ void PoseVisualizer::updateMatches(const spheres_localization::point_match_array
 
     // Store match count for removal next frame
     lastMatchCount = matches.matches.size();
+  }
+  else if (!paused && lastMatchCount > 0)
+  {
+    // Remove old match lines
+    clearLines("MatchLine", lastMatchCount);
+    lastMatchCount = 0;
   }
 }
 

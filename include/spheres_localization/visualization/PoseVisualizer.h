@@ -56,7 +56,7 @@ public:
 	void updateImage(const cv::Mat &img);
 	void updatePose(const pcl::TextureMapping<pcl::PointXYZ>::Camera cam);
 	void spinOnce();
-	bool ok(){return escPressed;}
+	bool ok(){return !escPressed;}
 
 private:
 	pcl::visualization::PCLVisualizer *visu;
@@ -64,8 +64,8 @@ private:
 	bool escPressed,
 		paused,
 		cameraTrack;
-	bool shouldDrawMatches,
-		shouldDrawCorresp;
+	bool displayMatches,
+		displayCorresp;
 	int lastMatchCount,
 		lastCorrespCount;
 

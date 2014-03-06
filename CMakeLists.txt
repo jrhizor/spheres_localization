@@ -110,6 +110,12 @@ add_executable(temp_broadcaster src/pose_estimation/temp_broadcaster.cpp)
 add_definitions(${PCL_DEFINITIONS})
 add_definitions(-Wno-deprecated -DEIGEN_DONT_VECTORIZE -DEIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT)
 
+target_link_libraries(MessageHandler ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} 
+${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so libvtkIO.so libvtkHybrid.so)
+
+target_link_libraries(PoseVisualizer ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES} 
+${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so libvtkIO.so libvtkHybrid.so)
+
 target_link_libraries(charting ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES})
 target_link_libraries(pose_estimation ${catkin_LIBRARIES} ${OpenCV_LIBRARIES}  ${Boost_LIBRARIES}
 ${PCL_LIBRARIES}  libvtkCommon.so libvtkFiltering.so libvtkRendering.so libvtkGraphics.so)
