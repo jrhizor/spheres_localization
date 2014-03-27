@@ -44,6 +44,8 @@
 #include <spheres_localization/utilities/registered_maps.h>
 
 
+#include <spheres_localization/pose_estimation/solvepnpransac2.h>
+
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
 #include <image_transport/image_transport.h>
@@ -287,6 +289,15 @@ std::cout << good_matches.size() << std::endl;
   int initMinInliers = 300; // as this goes up to 400 it becomes VERY STABLE, but it reaches fail states more often
   int count = 0;
 
+
+
+
+solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
+  
+  tvec.at<double>(0) = 100;
+  tvec.at<double>(1) = 100;
+  tvec.at<double>(2) = 100;
+
   while(inliers.size()==0)
   {
     inliers.clear();
@@ -296,13 +307,23 @@ std::cout << good_matches.size() << std::endl;
           initMinInliers, // min inliers 
           inliers, CV_EPNP);
  
+
     if(first) first = false;
 
     count++;
 
     std::cout << "ransac attempts: " << count << std::endl;
   }
-  
+
+  if(sqrt(tvec.at<double>(0)*tvec.at<double>(0)+
+    tvec.at<double>(1)*tvec.at<double>(1)+tvec.at<double>(2)*tvec.at<double>(2))>3.5)
+  {
+    solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
+    for(int k=0; k<10; ++k)
+    {
+      std::cout << "===================" << std::endl;
+    }
+  }  
 
   // now we have inlier indices
   std::vector<spheres_localization::point_match> pmatch_vec;
