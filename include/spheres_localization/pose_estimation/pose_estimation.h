@@ -62,6 +62,9 @@ typedef std::vector<InterestPoint3D> PtLookupTable;
 
 bool first = true;
 
+cv::Mat tvec_old;
+
+
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             int &numInliers, 
             int &numGoodMatches, int &timeMatch, int &timePE, const cv::Mat &queryImg,
@@ -282,8 +285,6 @@ std::cout << good_matches.size() << std::endl;
   
   std::vector<int> inliers;
 
-  //solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
-  
 
 
   int initMinInliers = 300; // as this goes up to 400 it becomes VERY STABLE, but it reaches fail states more often
@@ -291,8 +292,8 @@ std::cout << good_matches.size() << std::endl;
 
 
 
-
-solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
+  // crashes without this line -- WHY?
+  solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
   
   tvec.at<double>(0) = 100;
   tvec.at<double>(1) = 100;
@@ -308,22 +309,50 @@ solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false
           inliers, CV_EPNP);
  
 
-    if(first) first = false;
+    if(first) 
+    {
+      first = false;
+      tvec_old = tvec.clone();
+    }
 
     count++;
 
     std::cout << "ransac attempts: " << count << std::endl;
   }
 
-  if(sqrt(tvec.at<double>(0)*tvec.at<double>(0)+
-    tvec.at<double>(1)*tvec.at<double>(1)+tvec.at<double>(2)*tvec.at<double>(2))>3.5)
+  std::cout << "DIST: " << cv::norm(tvec, tvec_old, cv::NORM_L2) << std::endl << std::endl << std::endl;
+
+  int max_dist = 2;
+  
+  int iter = 0;
+
+  while(cv::norm(tvec, tvec_old, cv::NORM_L2)>max_dist && iter < 20)
   {
-    solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
-    for(int k=0; k<10; ++k)
-    {
-      std::cout << "===================" << std::endl;
-    }
-  }  
+    solvePnPRansac(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, 
+        2000, //iterations 
+        30, // reproj error 
+        400, // min inliers 
+        inliers, CV_EPNP);
+
+    std::cout << "DIST: " << cv::norm(tvec, tvec_old, cv::NORM_L2) << std::endl << std::endl << std::endl;
+
+    iter++;
+  }
+  
+
+  if(cv::norm(tvec, tvec_old, cv::NORM_L2)<max_dist && cv::norm(tvec, cv::NORM_L2)<100)
+  {
+    tvec_old = tvec.clone();
+  }
+  else
+  {
+    // todo: add check for large jump
+
+    std::cout << "FAILURE FAILURE" << std::endl;
+    std::cout << "FAILURE FAILURE" << std::endl;
+    std::cout << "FAILURE FAILURE" << std::endl;
+    std::cout << "FAILURE FAILURE" << std::endl;
+  }
 
   // now we have inlier indices
   std::vector<spheres_localization::point_match> pmatch_vec;

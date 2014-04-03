@@ -44,6 +44,7 @@
 // #include "epnp.h"
 // #include "p3p.h"
 #include <iostream>
+#include <opencv2/core/internal.hpp>
 using namespace cv;
 
 namespace cv
@@ -210,6 +211,9 @@ namespace cv
             {
                 rvec.copyTo(initRvec);
                 tvec.copyTo(initTvec);
+
+
+                generator.state = rand() + time(NULL);
             }
         private:
 			PnPSolver& operator=(const PnPSolver&);
@@ -250,6 +254,7 @@ void cv::solvePnPRansac(InputArray _opoints, InputArray _ipoints,
                         int iterationsCount, float reprojectionError, int minInliersCount,
                         OutputArray _inliers, int flags)
 {
+    std::cout << "CUSTOM RANSAC" << std::endl;
     Mat opoints = _opoints.getMat(), ipoints = _ipoints.getMat();
     Mat cameraMatrix = _cameraMatrix.getMat(), distCoeffs = _distCoeffs.getMat();
     
