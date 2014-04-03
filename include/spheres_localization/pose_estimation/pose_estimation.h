@@ -44,6 +44,8 @@
 #include <spheres_localization/utilities/registered_maps.h>
 
 
+#include <spheres_localization/pose_estimation/solvepnpransac2.h>
+
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
 #include <image_transport/image_transport.h>
@@ -59,6 +61,9 @@ namespace enc = sensor_msgs::image_encodings;
 typedef std::vector<InterestPoint3D> PtLookupTable;
 
 bool first = true;
+
+cv::Mat tvec_old;
+
 
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             int &numInliers, 
@@ -305,6 +310,15 @@ std::cout << good_matches.size() << std::endl;
   int initMinInliers = 300; // as this goes up to 400 it becomes VERY STABLE, but it reaches fail states more often
   int count = 0;
 
+
+
+  // crashes without this line -- WHY?
+  solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
+  
+  tvec.at<double>(0) = 100;
+  tvec.at<double>(1) = 100;
+  tvec.at<double>(2) = 100;
+
   while(inliers.size()==0)
   {
     inliers.clear();
@@ -314,13 +328,51 @@ std::cout << good_matches.size() << std::endl;
           initMinInliers, // min inliers 
           inliers, CV_EPNP);
  
-    if(first) first = false;
+
+    if(first) 
+    {
+      first = false;
+      tvec_old = tvec.clone();
+    }
 
     count++;
 
     std::cout << "ransac attempts: " << count << std::endl;
   }
+
+  std::cout << "DIST: " << cv::norm(tvec, tvec_old, cv::NORM_L2) << std::endl << std::endl << std::endl;
+
+  int max_dist = 2;
   
+  int iter = 0;
+
+  while(cv::norm(tvec, tvec_old, cv::NORM_L2)>max_dist && iter < 20)
+  {
+    solvePnPRansac(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, 
+        2000, //iterations 
+        30, // reproj error 
+        400, // min inliers 
+        inliers, CV_EPNP);
+
+    std::cout << "DIST: " << cv::norm(tvec, tvec_old, cv::NORM_L2) << std::endl << std::endl << std::endl;
+
+    iter++;
+  }
+  
+
+  if(cv::norm(tvec, tvec_old, cv::NORM_L2)<max_dist && cv::norm(tvec, cv::NORM_L2)<100)
+  {
+    tvec_old = tvec.clone();
+  }
+  else
+  {
+    // todo: add check for large jump
+
+    std::cout << "FAILURE FAILURE" << std::endl;
+    std::cout << "FAILURE FAILURE" << std::endl;
+    std::cout << "FAILURE FAILURE" << std::endl;
+    std::cout << "FAILURE FAILURE" << std::endl;
+  }
 
   // // now we have inlier indices
   // std::vector<spheres_localization::point_match> pmatch_vec;

@@ -1,0 +1,118 @@
+KinFuLargeScale_LabGuide
+
+-Last Modified 3/27/14
+
+Background on KinFu Large Scale
+===============================
+
+In short, KFLS is used for collecting images along with their 3d correspondences. In general it is used for building 3d environment maps of rooms, but that's not what we use it for. 
+
+To collect the data we need, a few small changes were made to a couple PCL files. The additional data we needed was the depth images.
+
+Changes made to PCL trunk
+==========================
+
+There should be a patch file floating around somewhere, but if you cannot locate it or need to make these changes on a newer version of pcl, here they are:
+
+Modified from
+http://pointclouds.org/downloads/source.html
+>Experimental
+
+First, grab latest PCL and put it in a directory you like
+
+>git clone https://github.com/PointCloudLibrary/pcl pcl-trunk
+
+Now, checkout to the version that I used:
+
+git checkout b30443ef55a137927af3a90e13aad3adf3a141d5
+
+Now, get stats, verify patch, and apply it
+>git apply --stat depth_fix.patch
+>git apply --check depth_fix.patch
+>git am < depth_fix.patch
+
+or do the following
+
+Next, you need to make some modifications, the goal of which is producing a depth image with the rgb images
+
+1. in pcl-trunk/gpu/kinfu_large_scale/src/screenshot_manager.cpp
+
+Replace function 
+
+    void
+    ScreenshotManager::saveImage(const Eigen::Affine3f &camPose, pcl::gpu::PtrStepSz<const PixelRGB> rgb24)
+
+    with
+
+    void
+    ScreenshotManager::saveImage(const Eigen::Affine3f &camPose, pcl::gpu::PtrStepSz<const PixelRGB> rgb24, pcl::gpu::PtrStepSz<const unsigned short> depth)
+
+    For passing the depth data to the screenshot_manager
+
+In saveImage insert line after
+
+    std::string filename_image = "KinFuSnapshots/";
+    std::string filename_pose = "KinFuSnapshots/";
+
+    >std::string filename_depth = "KinFuSnapshots/";
+
+In saveImage insert line after
+
+    // Create filenames
+    filename_pose = filename_pose + boost::lexical_cast<std::string> (screenshot_counter) + file_extension_pose;
+    filename_image = filename_image + boost::lexical_cast<std::string> (screenshot_counter) + file_extension_image;
+
+
+    >filename_depth = filename_depth + boost::lexical_cast<std::string> (screenshot_counter) + "_d" + file_extension_image;
+
+In saveImage insert line after
+
+    pcl::io::saveRgbPNGFile (filename_image, (unsigned char*)rgb24.data, 640,480);
+
+    >pcl::io::saveShortPNGFile (filename_depth, (unsigned short*)depth.data, 640,480, 1);
+
+2. in pcl-trunk/gpu/kinfu_large_scale/include/pcl/gpu/kinfu_large_scale/screenshot_manager.h
+
+Replace Function 
+    /**Save Screenshot*/
+	void
+	saveImage(const Eigen::Affine3f &camPose, pcl::gpu::PtrStepSz<const PixelRGB> rgb24);
+	
+	with
+
+	/**Save Screenshot*/
+	void
+	saveImage(const Eigen::Affine3f &camPose, pcl::gpu::PtrStepSz<const PixelRGB> rgb24, pcl::gpu::PtrStepSz<const short unsigned int> depth);
+
+	to reflect the cpp file
+
+3. in pcl-trunk/gpu/kinfu_large_scale/tools/kinfuLS_app.cpp
+
+Around line 880 (+-20 lines) replace line
+
+    screenshot_manager_.saveImage (kinfu_->getCameraPose (), rgb24);
+
+    with
+
+    screenshot_manager_.saveImage (kinfu_->getCameraPose (), rgb24, depth);
+
+
+
+Now, your Kinect Fusion Large Scale should be outputing depth images in addition to the color images it was already producing
+
+
+Finally, build pcl
+>cd pcl-trunk && mkdir build && cd build
+>cmake -DCMAKE_BUILD_TYPE=Release .. 
+>make
+>sudo make install
+
+To run kinfu with the proper parameters, run
+
+pcl_kinfu_largeScale -r -et
+
+We do not need the later stages in the kinect fusion pipeline, as this will generate the world.pcd and image/camera data we need.
+
+Tips for using Kinfu
+==========================
+Preferably, run this on a desktop with a decent nvidia gpu. The more cuda cores you have, the better. If you have to use a slower machine for generating the maps, make sure to move the camera very slowly while generating. In addition, take care when mapping flat surfaces, as kinfu is likely to desync on these types of surfaces, especially if it has poor performance.l

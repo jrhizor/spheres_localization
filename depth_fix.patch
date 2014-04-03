@@ -1,0 +1,78 @@
+From c49b2575dde5179ee70d1718b18c2da13506cfc6 Mon Sep 17 00:00:00 2001
+From: Alexander McArther <acmcarther@gmail.com>
+Date: Thu, 3 Apr 2014 13:49:51 -0700
+Subject: [PATCH] Depth Image add to KinFu
+
+---
+ .../include/pcl/gpu/kinfu_large_scale/screenshot_manager.h         | 2 +-
+ gpu/kinfu_large_scale/src/screenshot_manager.cpp                   | 7 ++++++-
+ gpu/kinfu_large_scale/tools/kinfuLS_app.cpp                        | 2 +-
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/gpu/kinfu_large_scale/include/pcl/gpu/kinfu_large_scale/screenshot_manager.h b/gpu/kinfu_large_scale/include/pcl/gpu/kinfu_large_scale/screenshot_manager.h
+index 9f0fb48..68f61ff 100644
+--- a/gpu/kinfu_large_scale/include/pcl/gpu/kinfu_large_scale/screenshot_manager.h
++++ b/gpu/kinfu_large_scale/include/pcl/gpu/kinfu_large_scale/screenshot_manager.h
+@@ -88,7 +88,7 @@ namespace pcl
+ 
+           /**Save Screenshot*/
+           void
+-          saveImage(const Eigen::Affine3f &camPose, pcl::gpu::PtrStepSz<const PixelRGB> rgb24);
++          saveImage(const Eigen::Affine3f &camPose, pcl::gpu::PtrStepSz<const PixelRGB> rgb24, pcl::gpu::PtrStepSz<const short unsigned int> depth);
+ 
+         private:
+ 
+diff --git a/gpu/kinfu_large_scale/src/screenshot_manager.cpp b/gpu/kinfu_large_scale/src/screenshot_manager.cpp
+index 111dc55..6af0f27 100644
+--- a/gpu/kinfu_large_scale/src/screenshot_manager.cpp
++++ b/gpu/kinfu_large_scale/src/screenshot_manager.cpp
+@@ -57,7 +57,7 @@ namespace pcl
+       //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ 
+       void
+-      ScreenshotManager::saveImage(const Eigen::Affine3f &camPose, pcl::gpu::PtrStepSz<const PixelRGB> rgb24)
++      ScreenshotManager::saveImage(const Eigen::Affine3f &camPose, pcl::gpu::PtrStepSz<const PixelRGB> rgb24, pcl::gpu::PtrStepSz<const unsigned short> depth)
+       {
+ 
+         PCL_WARN ("[o] [o] [o] [o] Saving screenshot [o] [o] [o] [o]\n");
+@@ -65,6 +65,7 @@ namespace pcl
+         std::string file_extension_image = ".png";
+         std::string file_extension_pose = ".txt";
+         std::string filename_image = "KinFuSnapshots/";
++        std::string filename_depth = "KinFuSnapshots/";
+         std::string filename_pose = "KinFuSnapshots/";
+ 
+         // Get Pose
+@@ -74,12 +75,16 @@ namespace pcl
+                     // Create filenames
+                     filename_pose = filename_pose + boost::lexical_cast<std::string> (screenshot_counter) + file_extension_pose;
+                     filename_image = filename_image + boost::lexical_cast<std::string> (screenshot_counter) + file_extension_image;
++                    filename_depth = filename_depth + boost::lexical_cast<std::string> (screenshot_counter) + "_d" + file_extension_image;
++
+ 
+                     // Write files
+                     writePose (filename_pose, teVecs, erreMats);
+           
+         // Save Image
+         pcl::io::saveRgbPNGFile (filename_image, (unsigned char*)rgb24.data, 640,480);
++        pcl::io::saveShortPNGFile (filename_depth, (unsigned short*)depth.data, 640,480, 1);
++
+           
+         screenshot_counter++;
+       }
+diff --git a/gpu/kinfu_large_scale/tools/kinfuLS_app.cpp b/gpu/kinfu_large_scale/tools/kinfuLS_app.cpp
+index 479ddd9..cd07463 100644
+--- a/gpu/kinfu_large_scale/tools/kinfuLS_app.cpp
++++ b/gpu/kinfu_large_scale/tools/kinfuLS_app.cpp
+@@ -879,7 +879,7 @@ struct KinFuLSApp
+     if (enable_texture_extraction_ && !kinfu_->icpIsLost ()) {
+       if ( (frame_counter_  % snapshot_rate_) == 0 )   // Should be defined as a parameter. Done.
+       {
+-        screenshot_manager_.saveImage (kinfu_->getCameraPose (), rgb24);
++        screenshot_manager_.saveImage (kinfu_->getCameraPose (), rgb24, depth);
+       }
+     }
+     
+-- 
+1.8.1.2
+
