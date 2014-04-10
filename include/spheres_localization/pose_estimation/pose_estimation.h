@@ -185,9 +185,14 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
       desc2.convertTo(desc2, CV_32F);
   }
     
-    startMark = clock();
+  startMark = clock();
 
-    matcher.knnMatch(desc, desc2, matches, 2);
+  // select only strongest keypoints in 2D image
+  // cv::Mat subImg = img(cv::Range(0, 0), cv::Range(100, 100));
+  std::cout << "desc : " << desc.rows << std::endl;
+  std::cout << "desc2: " << desc2.rows << std::endl;
+
+  matcher.knnMatch(desc, desc2, matches, 2);
 
   std::cout << "desc.height " << desc.size().height << std::endl;
   std::cout << "desc.width " << desc.size().width << std::endl; 
