@@ -177,7 +177,7 @@ void PoseVisualizer::updateCorrespondences(const spheres_localization::point_mat
     // Store corresp count for removal next frame
     lastCorrespCount = correspondences.matches.size();
   }
-  else if (!paused && lastCorrespCount > 0)
+  else if (lastCorrespCount > 0)
   {
     // Remove old corresp lines
     clearLines("CorrespLine", lastCorrespCount);
@@ -199,7 +199,7 @@ void PoseVisualizer::updateMatches(const spheres_localization::point_match_array
     // Store match count for removal next frame
     lastMatchCount = matches.matches.size();
   }
-  else if (!paused && lastMatchCount > 0)
+  else if (lastMatchCount > 0)
   {
     // Remove old match lines
     clearLines("MatchLine", lastMatchCount);

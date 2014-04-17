@@ -293,24 +293,24 @@ std::cout << good_matches.size() << std::endl;
   //solvePnP(objectPoints, imagePoints, cameraMatrix, distortions, rvec, tvec, false, CV_EPNP);
   
   // now we have inlier indices
-  std::vector<spheres_localization::point_match> pmatch_vec;
+  //std::vector<spheres_localization::point_match> pmatch_vec;
 
-  for(int i=0; i<imagePoints.size(); ++i)
-  {
-    int index = i;
+  // for(int i=0; i<imagePoints.size(); ++i)
+  // {
+  //   int index = i;
 
-    spheres_localization::point_match match;
+  //   spheres_localization::point_match match;
 
-    match.u = imagePoints[index].x;
-    match.v = imagePoints[index].y;
-    match.x = objectPoints[index].x;
-    match.y = objectPoints[index].y;
-    match.z = objectPoints[index].z;
+  //   match.u = imagePoints[index].x;
+  //   match.v = imagePoints[index].y;
+  //   match.x = objectPoints[index].x;
+  //   match.y = objectPoints[index].y;
+  //   match.z = objectPoints[index].z;
 
-    pmatch_vec.push_back(match);
-  }
+  //   pmatch_vec.push_back(match);
+  // }
 
-  pmatches_msg.matches = pmatch_vec;
+  // pmatches_msg.matches = pmatch_vec;
 
   int initMinInliers = 300; // as this goes up to 400 it becomes VERY STABLE, but it reaches fail states more often
   int count = 0;
@@ -379,25 +379,25 @@ std::cout << good_matches.size() << std::endl;
     std::cout << "FAILURE FAILURE" << std::endl;
   }
 
-  // // now we have inlier indices
-  // std::vector<spheres_localization::point_match> pmatch_vec;
+  // now we have inlier indices
+  std::vector<spheres_localization::point_match> pmatch_vec;
 
-  // for(int i=0; i<inliers.size(); ++i)
-  // {
-  //   int index = inliers[i];
+  for(int i=0; i<inliers.size(); ++i)
+  {
+    int index = inliers[i];
 
-  //   spheres_localization::point_match match;
+    spheres_localization::point_match match;
 
-  //   match.u = imagePoints[index].x;
-  //   match.v = imagePoints[index].y;
-  //   match.x = objectPoints[index].x;
-  //   match.y = objectPoints[index].y;
-  //   match.z = objectPoints[index].z;
+    match.u = imagePoints[index].x;
+    match.v = imagePoints[index].y;
+    match.x = objectPoints[index].x;
+    match.y = objectPoints[index].y;
+    match.z = objectPoints[index].z;
 
-  //   pmatch_vec.push_back(match);
-  // }
+    pmatch_vec.push_back(match);
+  }
 
-  // pmatches_msg.matches = pmatch_vec;
+  pmatches_msg.matches = pmatch_vec;
 
 
 
