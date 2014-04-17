@@ -54,16 +54,16 @@ MessageHandler::MessageHandler(PoseVisualizer *visu, std::string cameraStream)
 	it = new image_transport::ImageTransport(n);
 
 	// Pose Estimation handling
-	subPose = n.subscribe("pose_estimation", 1000, &MessageHandler::callbackReadPoseMessage, this);
+	subPose = n.subscribe("pose_estimation", 1, &MessageHandler::callbackReadPoseMessage, this);
 
 	// Image Handling
 	rgb_sub = it->subscribe(cameraStream.c_str(), 1, &MessageHandler::callbackReadImageMessage, this);
 
 	// Correspondence handling
-	subCorresp = n.subscribe("point_match_array", 1000, &MessageHandler::callbackReadCorrespMessage, this);	
+	subCorresp = n.subscribe("point_match_array", 1, &MessageHandler::callbackReadCorrespMessage, this);	
 
 	// Match handling
-	subMatches = n.subscribe("point_match_array_all", 1000, &MessageHandler::callbackReadMatchesMessage, this);		
+	subMatches = n.subscribe("point_match_array_all", 1, &MessageHandler::callbackReadMatchesMessage, this);		
 }
 
 void MessageHandler::callbackReadPoseMessage(const spheres_localization::pose& msg)
