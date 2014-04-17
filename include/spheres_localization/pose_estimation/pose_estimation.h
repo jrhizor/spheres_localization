@@ -64,6 +64,8 @@ bool first = true;
 
 cv::Mat tvec_old;
 
+std::map<int, bool> good_matches_old;
+
 
 void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::KeyPoint> &keypoints, const std::vector<cv::KeyPoint> &keypoints2, 
             int &numInliers, 
@@ -219,6 +221,12 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
           )
     {
       good_matches.push_back(matches[i][0]);
+
+      // add more versions if it was used last time around
+      if(good_matches_old[matches[i][0].queryIdx] && rand() % 10 < 3)
+      {
+        good_matches.push_back(matches[i][0]);
+      }
     }
   }
 
@@ -365,6 +373,14 @@ std::cout << good_matches.size() << std::endl;
 
   if(cv::norm(tvec, tvec_old, cv::NORM_L2)<max_dist && cv::norm(tvec, cv::NORM_L2)<100)
   {
+    // record good matches
+    good_matches_old.clear();
+
+    for(int i = 0; i < good_matches.size(); i++)
+    {
+      good_matches_old[good_matches[i].queryIdx] = true;
+    }
+
     tvec_old = tvec.clone();
   }
   else

@@ -129,7 +129,7 @@ namespace cv
                     colIndex = colIndex+1;
                 }
             }
-            
+
             //filter same 3d points, hang in solvePnP
             double eps = 1e-10;
             int num_same_points = 0;
@@ -140,7 +140,9 @@ namespace cv
                         num_same_points++;
                 }
             if (num_same_points > 0)
+            {
                 return;
+            }
             
             Mat localRvec, localTvec;
             rvecInit.copyTo(localRvec);
