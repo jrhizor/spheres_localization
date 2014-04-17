@@ -63,8 +63,7 @@ MessageHandler::MessageHandler(PoseVisualizer *visu, std::string cameraStream)
 	subCorresp = n.subscribe("point_match_array", 1000, &MessageHandler::callbackReadCorrespMessage, this);	
 
 	// Match handling
-	// TODO: When this is implemented by Jared, fix this stuff
-	//subMatches = n.subscribe("point_match_array", 1000, &MessageHandler::callbackReadMatchesMessage, this);		
+	subMatches = n.subscribe("point_match_array_all", 1000, &MessageHandler::callbackReadMatchesMessage, this);		
 }
 
 void MessageHandler::callbackReadPoseMessage(const spheres_localization::pose& msg)
