@@ -223,7 +223,7 @@ void findMatchesAndPose(cv::Mat &desc, cv::Mat &desc2, const std::vector<cv::Key
       good_matches.push_back(matches[i][0]);
 
       // add more versions if it was used last time around
-      if(good_matches_old[matches[i][0].queryIdx] && rand() % 10 < 3)
+      if(good_matches_old[matches[i][0].queryIdx] && rand() % 10 < 8)
       {
         good_matches.push_back(matches[i][0]);
       }
