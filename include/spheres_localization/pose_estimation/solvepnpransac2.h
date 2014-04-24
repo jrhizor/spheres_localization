@@ -113,23 +113,19 @@ namespace cv
             CameraParameters camera;
         };
         
-        void pnpTask(const vector<char>& pointsMask, const Mat& objectPoints, const Mat& imagePoints,
+        void pnpTask(const vector<int>& randPoints, const Mat& objectPoints, const Mat& imagePoints,
                      const Parameters& params, vector<int>& inliers, Mat& rvec, Mat& tvec,
                      const Mat& rvecInit, const Mat& tvecInit, Mutex& resultsMutex)
         {
             Mat modelObjectPoints(1, MIN_POINTS_COUNT, CV_32FC3), modelImagePoints(1, MIN_POINTS_COUNT, CV_32FC2);
 
             // TODO: use vector of indices instead of looping
-            for (int i = 0, colIndex = 0; i < (int)pointsMask.size(); i++)
+            for (int i = 0; i < randPoints.size(); i++)
             {
-                if (pointsMask[i])
-                {
-                    Mat colModelImagePoints = modelImagePoints(Rect(colIndex, 0, 1, 1));
-                    imagePoints.col(i).copyTo(colModelImagePoints);
-                    Mat colModelObjectPoints = modelObjectPoints(Rect(colIndex, 0, 1, 1));
-                    objectPoints.col(i).copyTo(colModelObjectPoints);
-                    colIndex = colIndex+1;
-                }
+                Mat colModelImagePoints = modelImagePoints(Rect(i, 0, 1, 1));
+                imagePoints.col(randPoints[i]).copyTo(colModelImagePoints);
+                Mat colModelObjectPoints = modelObjectPoints(Rect(i, 0, 1, 1));
+                objectPoints.col(randPoints[i]).copyTo(colModelObjectPoints);
             }
 
             //filter same 3d points, hang in solvePnP
@@ -191,17 +187,10 @@ namespace cv
         public:
             void operator()( const BlockedRange& r ) const
             {
-                std::cout << "hi " << objectPoints.cols << std::endl;
-                vector<char> pointsMask(objectPoints.cols, 0);
-                //memset(&pointsMask[0], 1, MIN_POINTS_COUNT );
-
                 vector<int> randPoints(MIN_POINTS_COUNT, -1);
-
 
                 for( int i=r.begin(); i!=r.end(); ++i )
                 {
-                    //generateVar(pointsMask);
-
                     // randomly initialize mask
                     for(int j=0; j<MIN_POINTS_COUNT; ++j)
                     {
@@ -209,7 +198,7 @@ namespace cv
 
                         while(!unique)
                         {
-                            randPoints[j] =  generator.uniform(0, pointsMask.size()-1);   
+                            randPoints[j] =  generator.uniform(0, objectPoints.cols-1);   
                             
                             bool temp_unique = true;
 
@@ -226,11 +215,9 @@ namespace cv
                                 unique = true;
                             }
                         }
-
-                        pointsMask[randPoints[j]] = 1;
                     }
 
-                    pnpTask(pointsMask, objectPoints, imagePoints, parameters,
+                    pnpTask(randPoints, objectPoints, imagePoints, parameters,
                             inliers, rvec, tvec, initRvec, initTvec, syncMutex);
                     if ((int)inliers.size() >= parameters.minInliersCount)
                     {
@@ -244,7 +231,6 @@ namespace cv
                     // clear mask
                     for(int j=0; j<MIN_POINTS_COUNT; ++j)
                     {
-                        pointsMask[randPoints[j]] = 0;
                         randPoints[j] = -1;
                     }
                 }
