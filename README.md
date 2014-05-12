@@ -23,7 +23,7 @@ To use a bag file for visualization:
 * Boost
 
 ## Warning!!!!!
-	Make sure you have added the following to your .bashrc file!
+Make sure you have added the following to your .bashrc file!
 * source /opt/ros/hydro/setup.bash
 * source ~/catkin_ws/devel/setup.bash
 
