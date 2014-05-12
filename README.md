@@ -22,6 +22,15 @@ To use a bag file for visualization:
 * OpenCV
 * Boost
 
+## Warning!!!!!
+	Make sure you have added the following to your .bashrc file!
+* source /opt/ros/hydro/setup.bash
+* source ~/catkin_ws/devel/setup.bash
+
+## Video Broadcast Process with the Android Phone
+* Install "IP Webcam" app for android (should already be on the lab phone)
+* Use ROS GSCam to relay IP Webcam images to a ROS camera topic
+
 ## Visualization Example for Garage Dataset
 	roscore
 

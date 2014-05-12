@@ -166,7 +166,7 @@ void PoseVisualizer::keyboardEventOccurred (const pcl::visualization::KeyboardEv
 void PoseVisualizer::updateCorrespondences(const spheres_localization::point_match_array& correspondences)
 {
   // When not paused and we want, draw correspondences
-  if (!paused && displayCorresp)
+  if (!paused && displayCorresp && !displayMatches)
   {
     // Remove old corresp lines
     clearLines("CorrespLine", lastCorrespCount);
